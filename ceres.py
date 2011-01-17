@@ -1,7 +1,7 @@
 import os
 import time
 import struct
-import cPickle as pickle
+import json
 from math import isnan
 from itertools import izip
 from os.path import isdir, exists, join, basename, dirname, getsize, abspath
@@ -193,7 +193,7 @@ class CeresNode:
 
   def readMetadata(self):
     if exists(self.metadataFile):
-      self.metadata = pickle.load( open(self.metadataFile, 'rb') )
+      self.metadata = json.load( open(self.metadataFile, 'r') )
     else:
       self.metadata = {}
 
@@ -203,8 +203,8 @@ class CeresNode:
       self.readMetadata()
 
     self.metadata.update(properties)
-    f = open(self.metadataFile, 'wb')
-    pickle.dump(self.metadata, f, protocol=-1)
+    f = open(self.metadataFile, 'w')
+    json.dump(self.metadata, f)
     f.close()
 
 
