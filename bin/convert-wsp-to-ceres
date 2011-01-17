@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+
+import sys
+import os
+import time
+from os.path import exists, dirname, basename, isfile, isdir, join
+from optparse import OptionParser
+import whisper
+import ceres
+
+
+parser = OptionParser(usage='''%prog [options] <path/to/somefile.wsp>''')
+parser.add_option('--verbose', action='store_true')
+parser.add_option('--delete', action='store_true')
+
+options, args = parser.parse_args()
+
+if not args:
+  print "You must specify a wsp file"
+  parser.print_usage()
+  sys.exit(1)
+
+
+wsp_file = args[0]
+wsp_dir = dirname(wsp_file)
+metric_name = basename(wsp_file)[:-4] #strip .wsp
+ceres_node_dir = join(wsp_dir, metric_name)
+
+if isdir(ceres_node_dir):
+  print "error: ceres node directory already exists (%s)" % ceres_node_dir
+  sys.exit(1)
+
+tree = ceres.getTree(ceres_node_dir)
+
+if not tree:
+  print "error: the specified path is not in a ceres tree"
+  sys.exit(1)
+
+nodePath = tree.getNodePath(ceres_node_dir)
+
+if options.verbose:
+  print "extracting datapoints from wsp file"
+
+timeInfo, values = whisper.fetch(wsp_file, fromTime=0, untilTime=time.time())
+datapoints = zip( xrange(*timeInfo), values )
+datapoints = [ (t,v) for (t,v) in datapoints if v is not None ]
+
+if options.verbose:
+  print "creating ceres node %s" % nodePath
+
+node = tree.createNode(nodePath)
+
+if options.verbose:
+  print "importing %d datapoints" % len(datapoints)
+
+node.write(datapoints)
+
+if options.delete:
+  if options.verbose:
+    print "deleting original wsp file: %s" % wsp_file
+  os.unlink(wsp_file)
+
+if options.verbose:
+  print "conversion successful"

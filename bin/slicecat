@@ -1,0 +1,31 @@
+#!/usr/bin/python
+
+import sys
+import os
+import time
+import struct
+from optparse import OptionParser
+
+
+parser = OptionParser(usage='%prog [options] <path>')
+
+options, args = parser.parse_args()
+
+if not args:
+  parser.print_usage()
+  sys.exit(1)
+
+path = args[0]
+
+filename = os.path.basename(path)
+timestamp, timeStep = filename[:-6].split('@', 1)
+timestamp, timeStep = int(timestamp), int(timeStep)
+
+packedValues = open(path, 'rb').read()
+format = '!' + ('d' * (len(packedValues) / 8))
+
+values = struct.unpack(format, packedValues)
+
+for value in values:
+  print "[%d]\t%s\t%s" % (timestamp, time.ctime(timestamp), value)
+  timestamp += timeStep
