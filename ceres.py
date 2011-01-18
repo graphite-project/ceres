@@ -259,8 +259,8 @@ class CeresNode:
         raise CorruptNode(self, "No slices exist for node %s" % self.fsPath)
 
     # Normalize the timestamps to fit proper intervals
-    fromTime  = int( fromTime - (fromTime % self.timeStep) )
-    untilTime = int( untilTime - (untilTime % self.timeStep) )
+    fromTime  = int( fromTime - (fromTime % self.timeStep) + self.timeStep )
+    untilTime = int( untilTime - (untilTime % self.timeStep) + self.timeStep )
 
     sliceBoundary = None # need this to know when to split up queries across slices
     resultValues = []
