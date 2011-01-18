@@ -17,6 +17,7 @@ NAN = float('nan')
 PACKED_NAN = struct.pack(DATAPOINT_FORMAT, NAN)
 MAX_SLICE_GAP = 10
 SLICE_CUTOFF_SIZE = 1440 * DATAPOINT_SIZE
+DEFAULT_TIMESTEP = 60
 
 
 class CeresTree:
@@ -118,14 +119,15 @@ class CeresNode:
 
 
   @classmethod
-  def create(cls, tree, nodePath, timeStep=60):
+  def create(cls, tree, nodePath, **properties):
     # Create the node directory
     fsPath = tree.getFilesystemPath(nodePath)
     os.makedirs(fsPath)
 
     # Create the initial metadata
+    properties['timeStep'] = properties.get('timeStep', DEFAULT_TIMESTEP)
     node = cls(tree, nodePath, fsPath)
-    node.writeMetadata(timeStep=timeStep)
+    node.writeMetadata(properties)
 
     # Create the initial data file
     now = int( time.time() )
@@ -198,7 +200,7 @@ class CeresNode:
       self.metadata = {}
 
 
-  def writeMetadata(self, **properties):
+  def writeMetadata(self, properties):
     if self.metadata is None:
       self.readMetadata()
 
