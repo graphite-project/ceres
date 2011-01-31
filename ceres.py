@@ -227,18 +227,6 @@ class CeresNode:
     self.slices = slices
 
 
-  def getRemoteSlices(self, cluster):
-    if 'remotes' not in self.metadata:
-      self.metadata['remotes'] = []
-      remote_slices = cluster.get_remote_slices()
-
-      for server in remote_slices:
-        self.metadata['remotes'].extend([ RemoteSlice(server, slice_info) for slice_info in remote_slices[server] ])
-
-    self.metadata['remotes'].sort(reverse=True)
-    return self.metadata['remotes']
-
-
   def hasDataForInterval(self, fromTime, untilTime):
     if not self.slices:
       self.readSlices()
@@ -253,7 +241,7 @@ class CeresNode:
            ( (untilTime is None) or (untilTime > earliestData) )
 
 
-  def read(self, fromTime, untilTime, clusterAPI=None):
+  def read(self, fromTime, untilTime):
     if not self.slices:
       self.readSlices()
 
@@ -264,41 +252,16 @@ class CeresNode:
     fromTime  = int( fromTime - (fromTime % self.timeStep) + self.timeStep )
     untilTime = int( untilTime - (untilTime % self.timeStep) + self.timeStep )
 
-    sliceBoundary = None # need this to know when to split up queries across slices
+    sliceBoundary = None # to know when to split up queries across slices
     resultValues = []
     earliestData = None
 
-    '''
-local_slices = [ slice for slice in self.slices if slice.hasDataForInterval(fromTime, untilTime) ]
-
-gaps = []
-for i,slice in enumerate(local_slices[:-1]):
-  next_slice = local_slices[i+1]
-
-  if next_slice.startTime - slice.endTime > self.timeStep:
-    gaps.append( (slice.endTime, next_slice.startTime) )
-
-remote_slices = [ slice for slice in self.getRemoteSlices() if slice.hasDataForGaps(gaps) ] #XXX
-
-
-
-# XXX
-local_data = query(local_slices)
-remote_data = query_remote_slices)
-return combine(local_data, remote_data)
-
-
-
-
-
-    '''
-
     for slice in self.slices:
-
-      if fromTime >= slice.startTime: # The requested interval starts after the start of this slice
+      # if the requested interval starts after the start of this slice
+      if fromTime >= slice.startTime:
         try:
           series = slice.read(fromTime, untilTime)
-        except NoData: # The requested interval is more recent than any data we have
+        except NoData:
           break
 
         earliestData = series.startTime
@@ -308,7 +271,8 @@ return combine(local_data, remote_data)
         resultValues = series.values + rightNulls + resultValues
         break
 
-      elif untilTime >= slice.startTime: # This slice contains data for part of the requested interval
+      # or if slice contains data for part of the requested interval
+      elif untilTime >= slice.startTime:
         # Split the request up if it straddles a slice boundary
         if (sliceBoundary is not None) and untilTime > sliceBoundary:
           requestUntilTime = sliceBoundary
@@ -326,18 +290,19 @@ return combine(local_data, remote_data)
         rightNulls   = [ None for i in range(rightMissing) ]
         resultValues = series.values + rightNulls + resultValues
 
-      sliceBoundary = slice.startTime # this is the right-side boundary on the next iteration
+      # this is the right-side boundary on the next iteration
+      sliceBoundary = slice.startTime
 
-    if earliestData is None: # The end of the requested interval predates all slices
+    # The end of the requested interval predates all slices
+    if earliestData is None:
       missing = int(untilTime - fromTime) / self.timeStep
       resultValues = [ None for i in range(missing) ]
-    else: # Left pad nulls if the start of the requested interval predates all slices
+
+    # Left pad nulls if the start of the requested interval predates all slices
+    else:
       leftMissing = (earliestData - fromTime) / self.timeStep
       leftNulls = [ None for i in range(leftMissing) ]
       resultValues = leftNulls + resultValues
-
-
-
 
     return TimeSeriesData(fromTime, untilTime, self.timeStep, resultValues)
 
@@ -399,7 +364,9 @@ return combine(local_data, remote_data)
 
 
   def compact(self, datapoints):
-    datapoints = sorted( ( int(timestamp), floatOrNAN(value) ) for timestamp, value in datapoints )
+    datapoints = sorted( (int(timestamp), float(value))
+                         for timestamp, value in datapoints
+                         if value is not None )
     sequences = []
     sequence = []
     minimumTimestamp = 0 # used to avoid duplicate intervals
@@ -539,19 +506,6 @@ class CeresSlice:
 
 
 
-class RemoteSlice:
-  def __init__(self, cluster, server, node, slice_info):
-    self.node = node
-    self.startTime = slice_info[0]
-    self.timeStep = slice_info[1]
-    self.size = slice_info[2]
-    self.endTime = self.startTime + ( self.timeStep * (self.size / DATAPOINT_SIZE) )
-
-
-  def read(self, fromTime, untilTime):
-    pass
-
-
 class TimeSeriesData:
   def __init__(self, startTime, endTime, timeStep, values):
     self.startTime = startTime
@@ -608,13 +562,6 @@ class InvalidRequest(Exception):
 
 class SliceGapTooLarge(Exception):
   "For internal use only"
-
-
-def floatOrNAN(value):
-  if value is None:
-    return NAN
-  else:
-    return float(value)
 
 
 def getTree(path):
