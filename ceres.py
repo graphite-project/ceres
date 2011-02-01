@@ -15,8 +15,7 @@ DATAPOINT_FORMAT = "!d"
 DATAPOINT_SIZE = struct.calcsize(DATAPOINT_FORMAT)
 NAN = float('nan')
 PACKED_NAN = struct.pack(DATAPOINT_FORMAT, NAN)
-MAX_SLICE_GAP = 10
-SLICE_CUTOFF_SIZE = 1440 * DATAPOINT_SIZE
+MAX_SLICE_GAP = 0
 DEFAULT_TIMESTEP = 60
 
 
@@ -190,7 +189,7 @@ class CeresNode:
     if not self.slices:
       self.readSlices()
 
-    return [ (slice.startTime, slice.timeStep, slice.size) for slice in self.slices ]
+    return [ (slice.startTime, slice.endTime, slice.timeStep) for slice in self.slices ]
 
 
   def readMetadata(self):
@@ -408,11 +407,6 @@ class CeresSlice:
   @property
   def endTime(self):
     return self.startTime + ((getsize(self.fsPath) / DATAPOINT_SIZE) * self.timeStep)
-
-
-  @property
-  def closePriority(self):
-    return max(0, getsize(self.fsPath) - SLICE_CUTOFF_SIZE)
 
 
   @property
