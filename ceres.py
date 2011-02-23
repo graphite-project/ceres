@@ -138,7 +138,8 @@ class CeresNode:
 
   @staticmethod
   def isNodeDir(path):
-    return isdir(path) and exists( join(path, '.ceres-node') ) and glob( join(path, '*.slice') )
+    return isdir(path) and exists( join(path, '.ceres-node') ) and \
+           [ f for f in os.listdir(path) if f.endswith('.slice') ]
 
 
   @classmethod
@@ -211,16 +212,11 @@ class CeresNode:
 
   def readSlices(self):
     slices = []
-    pattern = join(self.fsPath, '*.slice')
 
-    for path in glob(pattern):
-      try:
-        filename = basename(path)
+    for filename in os.listdir(self.fsPath):
+      if filename.endswith('.slice'):
         startTime, timeStep = filename[:-6].split('@')
-      except:
-        continue
-
-      slices.append( CeresSlice(self, int(startTime), int(timeStep)) )
+        slices.append( CeresSlice(self, int(startTime), int(timeStep)) )
 
     slices.sort(reverse=True)
     self.slices = slices
