@@ -470,7 +470,7 @@ class CeresSlice:
     if byteGap > 0: # if we're writing beyond the end of the file we pad the gap with nan's
 
       if filesize == 0: # if we're empty we simply rename the slice to reflect the initial timestamp
-        newPath = join(self.node.fsPath, '%d.slice' % beginningTime)
+        newPath = join(self.node.fsPath, '%d@%d.slice' % (beginningTime, self.timeStep))
         os.rename(self.fsPath, newPath)
         self.fsPath = newPath
         self.startTime = beginningTime
