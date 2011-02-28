@@ -107,6 +107,7 @@ class CeresTree:
 
 
 class CeresNode:
+  __slots__ = ('metadata', 'slices', 'tree', 'nodePath', 'fsPath', 'metadataFile')
   metadata = None
   slices = None
 
@@ -138,8 +139,7 @@ class CeresNode:
 
   @staticmethod
   def isNodeDir(path):
-    return isdir(path) and exists( join(path, '.ceres-node') ) and \
-           [ f for f in os.listdir(path) if f.endswith('.slice') ]
+    return isdir(path) and exists( join(path, '.ceres-node') )
 
 
   @classmethod
@@ -393,6 +393,8 @@ class CeresNode:
 
 
 class CeresSlice:
+  __slots__ = ('node', 'startTime', 'timeStep', 'fsPath')
+
   def __init__(self, node, startTime, timeStep):
     self.node = node
     self.startTime = startTime
@@ -497,6 +499,8 @@ class CeresSlice:
 
 
 class TimeSeriesData:
+  __slots__ = ('startTime', 'endTime', 'timeStep', 'values')
+
   def __init__(self, startTime, endTime, timeStep, values):
     self.startTime = startTime
     self.endTime = endTime
