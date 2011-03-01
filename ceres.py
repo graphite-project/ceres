@@ -262,7 +262,7 @@ class CeresNode:
         earliestData = series.startTime
 
         rightMissing = (untilTime - series.endTime) / self.timeStep
-        rightNulls   = [ None for i in range(rightMissing) ]
+        rightNulls   = [ None for i in range(rightMissing - len(resultValues)) ]
         resultValues = series.values + rightNulls + resultValues
         break
 
