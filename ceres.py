@@ -229,8 +229,8 @@ class CeresNode:
       if not self.slices:
         raise CorruptNode(self, "No slices exist for node %s" % self.fsPath)
 
-    earliestData = self.slices[0].startTime
-    latestData = self.slices[-1].endTime
+    earliestData = self.slices[-1].startTime
+    latestData = self.slices[0].endTime
 
     return ( (fromTime is None) or (fromTime < latestData) ) and \
            ( (untilTime is None) or (untilTime > earliestData) )
