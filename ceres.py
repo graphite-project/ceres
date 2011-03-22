@@ -4,7 +4,7 @@ import struct
 import json
 from math import isnan
 from itertools import izip
-from os.path import isdir, exists, join, basename, dirname, getsize, abspath
+from os.path import isdir, exists, join, basename, dirname, abspath, getsize, getmtime
 from glob import glob
 from bisect import bisect_left
 
@@ -107,9 +107,10 @@ class CeresTree:
 
 
 class CeresNode:
-  __slots__ = ('metadata', 'slices', 'tree', 'nodePath', 'fsPath', 'metadataFile')
+  __slots__ = ('metadata', 'slices', 'tree', 'nodePath', 'fsPath', 'metadataFile', 'slicesLastRead')
   metadata = None
   slices = None
+  slicesLastRead = 0.0
 
   def __init__(self, tree, nodePath, fsPath):
     self.tree = tree
@@ -220,6 +221,16 @@ class CeresNode:
 
     slices.sort(reverse=True)
     self.slices = slices
+    self.slicesLastRead = time.time()
+
+
+  def readSlicesIfNeeded(self):
+    if getmtime(self.metadataFile) > self.slicesLastRead:
+      self.readSlices()
+      return True
+
+    else:
+      return False
 
 
   def hasDataForInterval(self, fromTime, untilTime):
@@ -418,7 +429,7 @@ class CeresSlice:
 
   @property
   def mtime(self):
-    return os.stat(self.fsPath).st_mtime
+    return getmtime(self.fsPath)
 
 
   @classmethod
