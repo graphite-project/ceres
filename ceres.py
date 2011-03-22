@@ -356,6 +356,10 @@ class CeresNode:
     for sequence in needsEarlierSlice:
       slice = CeresSlice.create(self, int(sequence[0][0]), self.timeStep)
       slice.write(sequence)
+      self.slices.insert(0, slice)
+
+    if needsEarlierSlice:
+      self.slices.sort(reverse=True)
 
 
   def compact(self, datapoints):
