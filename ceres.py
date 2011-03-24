@@ -106,17 +106,17 @@ class CeresTree:
 
 
 
-class CeresNode:
+class CeresNode(object):
   __slots__ = ('metadata', 'slices', 'tree', 'nodePath', 'fsPath', 'metadataFile', 'slicesLastRead')
-  metadata = None
-  slices = None
-  slicesLastRead = 0.0
 
   def __init__(self, tree, nodePath, fsPath):
     self.tree = tree
     self.nodePath = nodePath
     self.fsPath = fsPath
+    self.metadata = None
     self.metadataFile = join(fsPath, '.ceres-node')
+    self.slices = None
+    self.slicesLastRead = 0.0
 
 
   @classmethod
@@ -407,7 +407,7 @@ class CeresNode:
 
 
 
-class CeresSlice:
+class CeresSlice(object):
   __slots__ = ('node', 'startTime', 'timeStep', 'fsPath')
 
   def __init__(self, node, startTime, timeStep):
@@ -513,7 +513,7 @@ class CeresSlice:
 
 
 
-class TimeSeriesData:
+class TimeSeriesData(object):
   __slots__ = ('startTime', 'endTime', 'timeStep', 'values')
 
   def __init__(self, startTime, endTime, timeStep, values):
