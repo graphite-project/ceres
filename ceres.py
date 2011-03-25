@@ -17,6 +17,7 @@ NAN = float('nan')
 PACKED_NAN = struct.pack(DATAPOINT_FORMAT, NAN)
 MAX_SLICE_GAP = 0
 DEFAULT_TIMESTEP = 60
+DEFAULT_SLICE_CACHING_BEHAVIOR = 'none'
 
 
 class CeresTree:
@@ -79,7 +80,9 @@ class CeresTree:
         nodePath = self.getNodePath(fsPath)
         node = CeresNode(self, nodePath, fsPath)
 
-        if node.hasDataForInterval(fromTime, untilTime):
+        if fromTime is None and untilTime is None:
+          yield node
+        elif node.hasDataForInterval(fromTime, untilTime):
           yield node
 
 
@@ -107,16 +110,18 @@ class CeresTree:
 
 
 class CeresNode(object):
-  __slots__ = ('metadata', 'slices', 'tree', 'nodePath', 'fsPath', 'metadataFile', 'slicesLastRead')
+  __slots__ = ('tree', 'nodePath', 'fsPath',
+               'metadataFile', 'timeStep',
+               'sliceCache', 'sliceCachingBehavior')
 
   def __init__(self, tree, nodePath, fsPath):
     self.tree = tree
     self.nodePath = nodePath
     self.fsPath = fsPath
-    self.metadata = None
     self.metadataFile = join(fsPath, '.ceres-node')
-    self.slices = None
-    self.slicesLastRead = 0.0
+    self.timeStep = None
+    self.sliceCache = None
+    self.sliceCachingBehavior = DEFAULT_SLICE_CACHING_BEHAVIOR
 
 
   @classmethod
@@ -131,9 +136,9 @@ class CeresNode(object):
     node.writeMetadata(properties)
 
     # Create the initial data file
-    now = int( time.time() )
-    baseTime = now - (now % timeStep)
-    slice = CeresSlice.create(node, baseTime, timeStep)
+    #now = int( time.time() )
+    #baseTime = now - (now % timeStep)
+    #slice = CeresSlice.create(node, baseTime, timeStep)
 
     return node
 
@@ -161,98 +166,95 @@ class CeresNode(object):
 
 
   @property
-  def timeStep(self):
-    if self.metadata is None:
-      self.readMetadata()
-
-    return self.metadata['timeStep']
-
-
-  @property
-  def size(self):
-    if not self.slices:
-      self.readSlices()
-    return sum(slice.size for slice in self.slices)
-
-
-  @property
-  def last_updated(self):
-    if not self.slices:
-      self.readSlices()
-
-    if self.slices:
-      return self.slices[0].mtime
-    else:
-      return 0
-
-
-  @property
   def slice_info(self):
-    if not self.slices:
-      self.readSlices()
-
     return [ (slice.startTime, slice.endTime, slice.timeStep) for slice in self.slices ]
 
 
   def readMetadata(self):
-    if exists(self.metadataFile):
-      self.metadata = json.load( open(self.metadataFile, 'r') )
-    else:
-      self.metadata = {}
+    metadata = json.load( open(self.metadataFile, 'r') )
+    self.timeStep = int( metadata['timeStep'] )
+    return metadata
 
 
-  def writeMetadata(self, properties):
-    if self.metadata is None:
-      self.readMetadata()
+  def writeMetadata(self, metadata):
+    self.timeStep = int( metadata['timeStep'] )
 
-    self.metadata.update(properties)
     f = open(self.metadataFile, 'w')
-    json.dump(self.metadata, f)
+    json.dump(metadata, f)
     f.close()
 
 
-  def readSlices(self):
-    slices = []
+  @property
+  def slices(self):
+    if self.sliceCache:
+      if self.sliceCachingBehavior == 'all':
+        for slice in self.sliceCache:
+          yield slice
 
+      elif self.sliceCachingBehavior == 'latest':
+        yield self.sliceCache
+        infos = self.readSlices()
+        for info in infos[1:]:
+          yield CeresSlice(self, *info)
+
+    else:
+      if self.sliceCachingBehavior == 'all':
+        self.sliceCache = [ CeresSlice(self, *info) for info in self.readSlices() ]
+        for slice in self.sliceCache:
+          yield slice
+
+      elif self.sliceCachingBehavior == 'latest':
+        infos = self.readSlices()
+        if infos:
+          self.sliceCache = CeresSlice(self, *infos[0])
+          yield self.sliceCache
+
+        for info in infos[1:]:
+          yield CeresSlice(self, *info)
+
+      elif self.sliceCachingBehavior == 'none':
+        for info in self.readSlices():
+          yield CeresSlice(self, *info)
+
+      else:
+        raise ValueError("invalid caching behavior configured '%s'" % self.sliceCachingBehavior)
+
+
+  def readSlices(self):
+    slice_info = []
     for filename in os.listdir(self.fsPath):
       if filename.endswith('.slice'):
         startTime, timeStep = filename[:-6].split('@')
-        slices.append( CeresSlice(self, int(startTime), int(timeStep)) )
+        slice_info.append( (int(startTime), int(timeStep)) )
 
-    slices.sort(reverse=True)
-    self.slices = slices
-    self.slicesLastRead = time.time()
+    slice_info.sort(reverse=True)
+    return slice_info
 
 
-  def readSlicesIfNeeded(self):
-    if getmtime(self.metadataFile) > self.slicesLastRead:
-      self.readSlices()
-      return True
+  def setSliceCachingBehavior(self, behavior):
+    behavior = behavior.lower()
+    if behavior not in ('none', 'all', 'latest'):
+      raise ValueError("invalid caching behavior '%s'" % behavior)
 
-    else:
-      return False
+    self.sliceCachingBehavior = behavior
+    self.sliceCache = None
 
 
   def hasDataForInterval(self, fromTime, untilTime):
-    if not self.slices:
-      self.readSlices()
+    slices = list(self.slices)
+    if not slices:
+      return False
 
-      if not self.slices:
-        raise CorruptNode(self, "No slices exist for node %s" % self.fsPath)
-
-    earliestData = self.slices[-1].startTime
-    latestData = self.slices[0].endTime
+    earliestData = slices[-1].startTime
+    latestData = slices[0].endTime
 
     return ( (fromTime is None) or (fromTime < latestData) ) and \
            ( (untilTime is None) or (untilTime > earliestData) )
 
 
   def read(self, fromTime, untilTime):
-    if not self.slices:
-      self.readSlices()
-
-      if not self.slices:
-        raise CorruptNode(self, "No slices exist for node %s" % self.fsPath)
+    if self.timeStep is None:
+      self.readMetadata()
 
     # Normalize the timestamps to fit proper intervals
     fromTime  = int( fromTime - (fromTime % self.timeStep) + self.timeStep )
@@ -314,14 +316,11 @@ class CeresNode(object):
 
 
   def write(self, datapoints):
+    if self.timeStep is None:
+      self.readMetadata()
+
     if not datapoints:
       return
-
-    if not self.slices:
-      self.readSlices()
-
-      if not self.slices:
-        raise CorruptNode(self, "No slices exist for node %s" % self.fsPath)
 
     sequences = self.compact(datapoints)
     needsEarlierSlice = [] # keep track of sequences that precede all existing slices
@@ -332,8 +331,10 @@ class CeresNode(object):
       beginningTime = timestamps[0]
       endingTime = timestamps[-1]
       sliceBoundary = None # used to prevent writing sequences across slice boundaries
+      slicesExist = False
 
       for slice in self.slices:
+        slicesExist = True
 
         # truncate sequence so it doesn't cross the slice boundaries
         if beginningTime >= slice.startTime:
@@ -348,7 +349,7 @@ class CeresNode(object):
           except SliceGapTooLarge:
             newSlice = CeresSlice.create(self, beginningTime, slice.timeStep)
             newSlice.write(sequenceWithinSlice)
-            self.slices.insert(self.slices.index(slice), newSlice)
+            self.sliceCache = None
 
           break
 
@@ -364,13 +365,15 @@ class CeresNode(object):
 
         sliceBoundary = slice.startTime
 
+      if not slicesExist:
+        sequences.append(sequence)
+        needsEarlierSlice = sequences
+        break
+
     for sequence in needsEarlierSlice:
       slice = CeresSlice.create(self, int(sequence[0][0]), self.timeStep)
       slice.write(sequence)
-      self.slices.insert(0, slice)
-
-    if needsEarlierSlice:
-      self.slices.sort(reverse=True)
+      self.sliceCache = None
 
 
   def compact(self, datapoints):
@@ -418,13 +421,13 @@ class CeresSlice(object):
 
 
   @property
-  def endTime(self):
-    return self.startTime + ((getsize(self.fsPath) / DATAPOINT_SIZE) * self.timeStep)
+  def isEmpty(self):
+    return getsize(self.fsPath) == 0
 
 
   @property
-  def size(self):
-    return getsize(self.fsPath)
+  def endTime(self):
+    return self.startTime + ((getsize(self.fsPath) / DATAPOINT_SIZE) * self.timeStep)
 
 
   @property
@@ -484,19 +487,10 @@ class CeresSlice(object):
 
     filesize = getsize(self.fsPath)
     byteGap = byteOffset - filesize
-    if byteGap > 0: # if we're writing beyond the end of the file we pad the gap with nan's
+    if byteGap > 0: # pad the allowable gap with nan's
 
-      if filesize == 0: # if we're empty we simply rename the slice to reflect the initial timestamp
-        newPath = join(self.node.fsPath, '%d@%d.slice' % (beginningTime, self.timeStep))
-        os.rename(self.fsPath, newPath)
-        self.fsPath = newPath
-        self.startTime = beginningTime
-        byteOffset = 0
-        #self.node.slices.sort(reverse=True) #I don't think this is necessary
-
-      elif byteGap > MAX_SLICE_GAP:
+      if byteGap > MAX_SLICE_GAP:
         raise SliceGapTooLarge()
-
       else:
         pointGap = byteGap / DATAPOINT_SIZE
         packedGap = PACKED_NAN * pointGap
@@ -579,3 +573,13 @@ def getTree(path):
       return CeresTree(path)
 
     path = dirname(path)
+
+
+def setDefaultSliceCachingBehavior(self, behavior):
+  global DEFAULT_SLICE_CACHING_BEHAVIOR
+
+  behavior = behavior.lower()
+  if behavior not in ('none', 'all', 'latest'):
+    raise ValueError("invalid caching behavior '%s'" % behavior)
+
+  DEFAULT_SLICE_CACHING_BEHAVIOR = behavior
