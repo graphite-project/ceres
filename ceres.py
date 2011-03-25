@@ -575,7 +575,7 @@ def getTree(path):
     path = dirname(path)
 
 
-def setDefaultSliceCachingBehavior(self, behavior):
+def setDefaultSliceCachingBehavior(behavior):
   global DEFAULT_SLICE_CACHING_BEHAVIOR
 
   behavior = behavior.lower()
