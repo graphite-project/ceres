@@ -1,11 +1,25 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.6
 
 import sys
 import os
 import time
-from os.path import basename, dirname, splitext, exists, join
+from os.path import basename, dirname, splitext, exists, join, isfile
 from optparse import OptionParser
 from ceres import getTree, CeresNode
+
+# Make carbon imports available for some functionality
+root_dir = os.environ['GRAPHITE_ROOT'] = os.environ.get('GRAPHITE_ROOT', '/opt/graphite/')
+lib_dir = join(root_dir, 'lib')
+sys.path.append(lib_dir)
+
+try:
+  import carbon
+except ImportError:
+  print ("Failed to import carbon, specify your installation location "
+         "with the GRAPHITE_ROOT environment variable.")
+  sys.exit(1)
+
+from carbon.storage import loadStorageSchemas
 
 
 EVENTS = (
@@ -74,7 +88,7 @@ class EventDispatcher:
       self.handlers[event] = []
     self.handlers[event].append(handler)
 
-  def dispatch(event, *args, **kwargs):
+  def dispatch(self, event, *args, **kwargs):
     for handler in self.handlers.get(event, []):
       try:
         handler(*args, **kwargs)
@@ -102,8 +116,22 @@ logfile = open('/dev/null', 'w')
 def log(message):
   logfile.write("[%s]  %s\n" % (time.ctime(), message.strip()))
 
+
+schemas = None
+def get_storage_config(path):
+  global schemas
+  if schemas is None:
+    schemas = loadStorageSchemas()
+
+  for schema in schemas:
+    if schema.matches(path):
+      return schema
+
+  raise Exception("No storage schema matched the metric '%s', check your storage-schemas.conf file." % path)
+
+
 shared['log'] = log
-#shared['match'] = match
+shared['get_storage_config'] = get_storage_config
 
 
 if __name__ == '__main__':
@@ -164,7 +192,7 @@ if __name__ == '__main__':
   log("maintenance_start")
   dispatcher('maintenance_start', tree)
 
-  for current_dir, subdirs, files in os.walk(options.tree):
+  for current_dir, subdirs, files in os.walk(options.root):
     for subdir in subdirs:
       path = join(current_dir, subdir)
 
