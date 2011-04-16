@@ -240,6 +240,10 @@ class CeresNode(object):
     self.sliceCache = None
 
 
+  def clearSliceCache(self):
+    self.sliceCache = None
+
+
   def hasDataForInterval(self, fromTime, untilTime):
     slices = list(self.slices)
     if not slices:
@@ -500,6 +504,24 @@ class CeresSlice(object):
     with file(self.fsPath, 'r+b') as fileHandle:
       fileHandle.seek(byteOffset)
       fileHandle.write(packedValues)
+
+
+  def deleteBefore(self, t):
+    timeOffset = t - self.startTime
+    if timeOffset < 0:
+      return
+
+    pointOffset = timeOffset / self.timeStep
+    byteOffset  = pointOffset * DATAPOINT_SIZE
+    if not byteOffset:
+      return
+
+    with file(self.fsPath, 'r+b') as fileHandle:
+      fileHandle.seek(byteOffset)
+      fileData = fileHandle.read()
+      fileHandle.seek(0)
+      fileHandle.write(fileData)
+      fileHandle.truncate()
 
 
   def __cmp__(self, other):
