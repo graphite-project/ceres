@@ -2,6 +2,7 @@ import os
 import time
 import struct
 import json
+import errno
 from math import isnan
 from itertools import izip
 from os.path import isdir, exists, join, basename, dirname, abspath, getsize, getmtime
@@ -221,6 +222,9 @@ class CeresNode(object):
 
 
   def readSlices(self):
+    if not exists(self.fsPath):
+      raise NodeDeleted()
+
     slice_info = []
     for filename in os.listdir(self.fsPath):
       if filename.endswith('.slice'):
@@ -338,6 +342,9 @@ class CeresNode(object):
       slicesExist = False
 
       for slice in self.slices:
+        if slice.timeStep != self.timeStep:
+          continue
+
         slicesExist = True
 
         # truncate sequence so it doesn't cross the slice boundaries
@@ -354,6 +361,10 @@ class CeresNode(object):
             newSlice = CeresSlice.create(self, beginningTime, slice.timeStep)
             newSlice.write(sequenceWithinSlice)
             self.sliceCache = None
+          except SliceDeleted:
+            self.sliceCache = None
+            self.write(datapoints) # recurse to retry
+            return
 
           break
 
@@ -489,7 +500,14 @@ class CeresSlice(object):
     format = '!' + ('d' * len(values))
     packedValues = struct.pack(format, *values)
 
-    filesize = getsize(self.fsPath)
+    try:
+      filesize = getsize(self.fsPath)
+    except OSError, e:
+      if e.errno == errno.ENOENT:
+        raise SliceDeleted()
+      else:
+        raise
+
     byteGap = byteOffset - filesize
     if byteGap > 0: # pad the allowable gap with nan's
 
@@ -502,11 +520,19 @@ class CeresSlice(object):
         byteOffset -= byteGap
 
     with file(self.fsPath, 'r+b') as fileHandle:
-      fileHandle.seek(byteOffset)
+      try:
+        fileHandle.seek(byteOffset)
+      except IOError:
+        print " IOError: fsPath=%s byteOffset=%d size=%d sequence=%s" % (self.fsPath, byteOffset, filesize, sequence)
+        raise
       fileHandle.write(packedValues)
 
 
   def deleteBefore(self, t):
+    if not exists(self.fsPath):
+      raise SliceDeleted()
+
+    t = t - (t % self.timeStep)
     timeOffset = t - self.startTime
     if timeOffset < 0:
       return
@@ -516,12 +542,20 @@ class CeresSlice(object):
     if not byteOffset:
       return
 
+    self.node.clearSliceCache()
     with file(self.fsPath, 'r+b') as fileHandle:
       fileHandle.seek(byteOffset)
       fileData = fileHandle.read()
-      fileHandle.seek(0)
-      fileHandle.write(fileData)
-      fileHandle.truncate()
+      if fileData:
+        fileHandle.seek(0)
+        fileHandle.write(fileData)
+        fileHandle.truncate()
+        fileHandle.close()
+        newFsPath = join(dirname(self.fsPath), "%d@%d.slice" % (t, self.timeStep))
+        os.rename(self.fsPath, newFsPath)
+      else:
+        os.unlink(self.fsPath)
+        raise SliceDeleted()
 
 
   def __cmp__(self, other):
@@ -580,6 +614,8 @@ class NoData(Exception):
 class NodeNotFound(Exception):
   pass
 
+class NodeDeleted(Exception):
+  pass
 
 class InvalidRequest(Exception):
   pass
@@ -587,6 +623,9 @@ class InvalidRequest(Exception):
 
 class SliceGapTooLarge(Exception):
   "For internal use only"
+
+class SliceDeleted(Exception):
+  pass
 
 
 def getTree(path):
