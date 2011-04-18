@@ -3,7 +3,8 @@
 import sys
 import os
 import time
-from os.path import basename, dirname, splitext, exists, join, isfile
+import traceback
+from os.path import basename, dirname, splitext, exists, join, isfile, expanduser, abspath
 from optparse import OptionParser
 from ceres import getTree, CeresNode
 
@@ -58,10 +59,13 @@ class Plugin:
 
 class PluginFinder:
   def __init__(self, plugin_dir):
-    self.plugin_dir = plugin_dir
+    self.plugin_dir = abspath( expanduser(plugin_dir) )
 
   def find_plugins(self, plugin_refs):
     for ref in plugin_refs:
+      if ref.startswith('~'):
+        ref = expanduser(ref)
+
       if isfile(ref):
         yield Plugin(ref)
 
@@ -93,7 +97,9 @@ class EventDispatcher:
       try:
         handler(*args, **kwargs)
       except:
-        log("Error in %s event-handler" % event)
+        log("--- Error in %s event-handler ---" % event)
+        log( traceback.format_exc() )
+        log('-' * 80)
 
   __call__ = dispatch
 
