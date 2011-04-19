@@ -30,19 +30,18 @@ EVENTS = (
   'directory_found',
   'directory_empty',
 )
-shared = {}
 
 
 class Plugin:
-  context = {}
+  context = {
+    'params' : {}
+  }
 
   def __init__(self, path):
     self.path = path
     self.name = basename( splitext(path)[0] )
-    self.namespace = {
-      'context' : Plugin.context,
-    }
-    self.namespace.update(shared)
+    self.namespace = {}
+    self.namespace.update(Plugin.context)
     self.event_handlers = {}
 
   def load(self):
@@ -136,8 +135,8 @@ def get_storage_config(path):
   raise Exception("No storage schema matched the metric '%s', check your storage-schemas.conf file." % path)
 
 
-shared['log'] = log
-shared['get_storage_config'] = get_storage_config
+Plugin.context['log'] = log
+Plugin.context['get_storage_config'] = get_storage_config
 
 
 if __name__ == '__main__':
@@ -155,7 +154,7 @@ if __name__ == '__main__':
   for arg in args:
     if '=' in arg:
       key, value = arg.split('=')
-      shared[key] = value
+      Plugin.context['params'][key] = value
     else:
       plugin_args.append(arg)
 
@@ -179,6 +178,10 @@ if __name__ == '__main__':
 
   dispatcher = EventDispatcher()
 
+  def dispatch(event, *args):
+    log("%s :: %s" % (event, args))
+    dispatcher(event, *args)
+
   for plugin in plugins:
     plugin.load()
     for event, handler in plugin.event_handlers.items():
@@ -195,27 +198,28 @@ if __name__ == '__main__':
     logfile = sys.stdout
 
   # Begin walking the tree
-  log("maintenance_start")
-  dispatcher('maintenance_start', tree)
+  dispatch('maintenance_start', tree)
 
   for current_dir, subdirs, files in os.walk(options.root):
     for subdir in subdirs:
+      if subdir == '.ceres-tree':
+        continue
+
       path = join(current_dir, subdir)
 
       if os.listdir(path):
-        dispatcher('directory_found', path)
-        if not os.listdir(path): # check again in case a handler empties it
-          dispatcher('directory_empty', path)
+
+        if exists( join(path, '.ceres-node') ):
+          nodePath = tree.getNodePath(path)
+          node = CeresNode(tree, nodePath, path)
+          dispatch('node_found', node)
+
+        else:
+          dispatch('directory_found', path)
+          if not os.listdir(path): # check again in case a handler empties it
+            dispatch('directory_empty', path)
 
       else:
-        dispatcher('directory_empty', path)
+        dispatch('directory_empty', path)
 
-
-    for filename in files:
-      if filename == '.ceres-node':
-        nodePath = tree.getNodePath(current_dir)
-        node = CeresNode(tree, nodePath, current_dir)
-        dispatcher('node_found', node)
-
-  dispatcher('maintenance_complete', tree)
-  log("maintenance_complete")
+  dispatch('maintenance_complete', tree)
