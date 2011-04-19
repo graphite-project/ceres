@@ -29,6 +29,11 @@ class CeresTree:
       raise ValueError("Invalid root directory '%s'" % root)
 
 
+  def __repr__(self):
+    return "<CeresTree[0x%x]: %s>" % (id(self), self.root)
+  __str__ = __repr__
+
+
   @classmethod
   def createTree(cls, root, **props):
     ceresDir = join(root, '.ceres-tree')
@@ -123,6 +128,11 @@ class CeresNode(object):
     self.timeStep = None
     self.sliceCache = None
     self.sliceCachingBehavior = DEFAULT_SLICE_CACHING_BEHAVIOR
+
+
+  def __repr__(self):
+    return "<CeresNode[0x%x]: %s>" % (id(self), self.nodePath)
+  __str__ = __repr__
 
 
   @classmethod
@@ -433,6 +443,11 @@ class CeresSlice(object):
     self.startTime = startTime
     self.timeStep = timeStep
     self.fsPath = join(node.fsPath, '%d@%d.slice' % (startTime, timeStep))
+
+
+  def __repr__(self):
+    return "<CeresSlice[0x%x]: %s>" % (id(self), self.fsPath)
+  __str__ = __repr__
 
 
   @property
