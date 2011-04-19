@@ -9,9 +9,6 @@ def aggregate(node, datapoints): # Put your custom aggregation logic here
 
 
 def node_found(node):
-  if not node.nodePath.startswith('instances'):
-    return
-
   schema = get_storage_config(node.nodePath)
   archives = []
   t = int( time.time() )
