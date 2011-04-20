@@ -1,5 +1,13 @@
 import time
 
+required_params = (
+  'rate',
+)
+
+for param in required_params:
+  if param not in params:
+    raise MissingRequiredParam(param)
+
 
 nodes_per_second = int( params['rate'] )
 node_count = 0

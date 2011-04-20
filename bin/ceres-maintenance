@@ -120,6 +120,7 @@ logfile = open('/dev/null', 'w')
 
 def log(message):
   logfile.write("[%s]  %s\n" % (time.ctime(), message.strip()))
+  logfile.flush()
 
 
 schemas = None
@@ -135,18 +136,31 @@ def get_storage_config(path):
   raise Exception("No storage schema matched the metric '%s', check your storage-schemas.conf file." % path)
 
 
+class MissingRequiredParam(Exception):
+  def __init__(self, param):
+    Exception.__init__(self)
+    self.param = param
+
+
+class PluginFail(Exception):
+  pass
+
+
 Plugin.context['log'] = log
 Plugin.context['get_storage_config'] = get_storage_config
+Plugin.context['MissingRequiredParam'] = MissingRequiredParam
+Plugin.context['PluginFail'] = PluginFail
 
 
 if __name__ == '__main__':
+  default_plugindir = join(root_dir, 'lib', 'ceres-plugins')
   parser = OptionParser(usage='''%prog [options] plugin [plugin2 ...] [key=val ...]''')
   parser.add_option('--daemon', action='store_true')
   parser.add_option('--log', help="Write to the given log file instead of stdout")
   parser.add_option('--root', default='/opt/graphite/storage/ceres/',
                     help="Specify were to perform maintenance (default: /opt/graphite/storage/ceres/)")
-  parser.add_option('--plugindir', default='/opt/graphite/lib/maintenance-plugins/',
-                    help="Specify path to the plugin directory (default: /opt/graphite/lib/maintenance-plugins/")
+  parser.add_option('--plugindir', default=default_plugindir,
+                    help="Specify path to the plugin directory (default: %s)" % default_plugindir)
 
   options, args = parser.parse_args()
 
@@ -183,7 +197,15 @@ if __name__ == '__main__':
     dispatcher(event, *args)
 
   for plugin in plugins:
-    plugin.load()
+    try:
+      plugin.load()
+    except MissingRequiredParam, e:
+      print "Failed to load %s plugin: required param '%s' must be specified" % (plugin.name, e.param)
+      sys.exit(1)
+    except PluginFail, e:
+      print "Failed to load %s plugin: %s" % (plugin.name, e.message)
+      sys.exit(1)
+
     for event, handler in plugin.event_handlers.items():
       dispatcher.add_handler(event, handler)
 
