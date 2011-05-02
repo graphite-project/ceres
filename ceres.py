@@ -19,6 +19,7 @@ PACKED_NAN = struct.pack(DATAPOINT_FORMAT, NAN)
 MAX_SLICE_GAP = 0
 DEFAULT_TIMESTEP = 60
 DEFAULT_SLICE_CACHING_BEHAVIOR = 'none'
+SLICE_PERMS = 0644
 
 
 class CeresTree:
@@ -38,7 +39,7 @@ class CeresTree:
   def createTree(cls, root, **props):
     ceresDir = join(root, '.ceres-tree')
     if not isdir(ceresDir):
-      os.makedirs(ceresDir)
+      os.system("mkdir -p '%s'" % ceresDir)
 
     for prop,value in props.items():
       propFile = join(ceresDir, prop)
@@ -470,6 +471,7 @@ class CeresSlice(object):
     slice = cls(node, startTime, timeStep)
     fileHandle = open(slice.fsPath, 'wb')
     fileHandle.close()
+    os.chmod(slice.fsPath, SLICE_PERMS)
     return slice
 
 
