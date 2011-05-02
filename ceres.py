@@ -140,7 +140,7 @@ class CeresNode(object):
   def create(cls, tree, nodePath, **properties):
     # Create the node directory
     fsPath = tree.getFilesystemPath(nodePath)
-    os.makedirs(fsPath)
+    os.system("mkdir -p '%s'" % fsPath)
 
     # Create the initial metadata
     timeStep = properties['timeStep'] = properties.get('timeStep', DEFAULT_TIMESTEP)
