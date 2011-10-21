@@ -1,3 +1,4 @@
+# Ceres requires Python 2.6 or newer
 import os
 import time
 import struct
