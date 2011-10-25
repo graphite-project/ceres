@@ -91,7 +91,7 @@ class CeresTree:
     for fsPath in glob( self.getFilesystemPath(nodePattern) ):
       if CeresNode.isNodeDir(fsPath):
         nodePath = self.getNodePath(fsPath)
-        node = CeresNode(self, nodePath, fsPath)
+        node = self.getNode(nodePath)
 
         if fromTime is None and untilTime is None:
           yield node
@@ -132,7 +132,7 @@ class CeresNode(object):
     self.nodePath = nodePath
     self.fsPath = fsPath
     self.metadataFile = join(fsPath, '.ceres-node')
-    self.timeStep = None
+    self.timeStep
     self.sliceCache = None
     self.sliceCachingBehavior = DEFAULT_SLICE_CACHING_BEHAVIOR
 
