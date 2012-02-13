@@ -132,7 +132,7 @@ class CeresNode(object):
     self.nodePath = nodePath
     self.fsPath = fsPath
     self.metadataFile = join(fsPath, '.ceres-node')
-    self.timeStep
+    self.timeStep = None
     self.sliceCache = None
     self.sliceCachingBehavior = DEFAULT_SLICE_CACHING_BEHAVIOR
 
