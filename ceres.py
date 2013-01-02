@@ -36,7 +36,7 @@ MAX_SLICE_GAP = 80
 DEFAULT_TIMESTEP = 60
 DEFAULT_SLICE_CACHING_BEHAVIOR = 'none'
 SLICE_PERMS = 0644
-
+DIR_PERMS = 0755
 
 class CeresTree:
   def __init__(self, root):
@@ -54,7 +54,7 @@ class CeresTree:
   def createTree(cls, root, **props):
     ceresDir = join(root, '.ceres-tree')
     if not isdir(ceresDir):
-      os.system("mkdir -p '%s'" % ceresDir)
+      os.makedirs(ceresDir, DIR_PERMS)
 
     for prop,value in props.items():
       propFile = join(ceresDir, prop)
@@ -147,7 +147,7 @@ class CeresNode(object):
   def create(cls, tree, nodePath, **properties):
     # Create the node directory
     fsPath = tree.getFilesystemPath(nodePath)
-    os.system("mkdir -p '%s'" % fsPath)
+    os.makedirs(fsPath, DIR_PERMS)
 
     # Create the initial metadata
     timeStep = properties['timeStep'] = properties.get('timeStep', DEFAULT_TIMESTEP)
