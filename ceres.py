@@ -16,13 +16,12 @@
 
 # Ceres requires Python 2.6 or newer
 import os
-import time
 import struct
 import json
 import errno
 from math import isnan
 from itertools import izip
-from os.path import isdir, exists, join, basename, dirname, abspath, getsize, getmtime
+from os.path import isdir, exists, join, dirname, abspath, getsize, getmtime
 from glob import glob
 from bisect import bisect_left
 
@@ -47,11 +46,9 @@ class CeresTree:
       raise ValueError("Invalid root directory '%s'" % root)
     self.nodeCache = {}
 
-
   def __repr__(self):
     return "<CeresTree[0x%x]: %s>" % (id(self), self.root)
   __str__ = __repr__
-
 
   @classmethod
   def createTree(cls, root, **props):
@@ -67,30 +64,25 @@ class CeresTree:
 
     return cls(root)
 
-
   def walk(self, **kwargs):
     for (fsPath, subdirs, filenames) in os.walk(self.root, **kwargs):
       if CeresNode.isNodeDir(fsPath):
         nodePath = self.getNodePath(fsPath)
         yield CeresNode(self, nodePath, fsPath)
 
-
   def getFilesystemPath(self, nodePath):
     return join(self.root, nodePath.replace('.', '/'))
-
 
   def getNodePath(self, fsPath):
     fsPath = abspath(fsPath)
     if not fsPath.startswith(self.root):
       raise ValueError("path '%s' not beneath tree root '%s'" % (fsPath, self.root))
 
-    nodePath = fsPath[ len(self.root): ].strip('/').replace('/', '.')
+    nodePath = fsPath[len(self.root):].strip('/').replace('/', '.')
     return nodePath
 
-
   def hasNode(self, nodePath):
-    return isdir( self.getFilesystemPath(nodePath) )
-
+    return isdir(self.getFilesystemPath(nodePath))
 
   def getNode(self, nodePath):
     if nodePath not in self.nodeCache:
@@ -102,9 +94,8 @@ class CeresTree:
 
     return self.nodeCache[nodePath]
 
-
   def find(self, nodePattern, fromTime=None, untilTime=None):
-    for fsPath in glob( self.getFilesystemPath(nodePattern) ):
+    for fsPath in glob(self.getFilesystemPath(nodePattern)):
       if CeresNode.isNodeDir(fsPath):
         nodePath = self.getNodePath(fsPath)
         node = self.getNode(nodePath)
@@ -114,10 +105,8 @@ class CeresTree:
         elif node.hasDataForInterval(fromTime, untilTime):
           yield node
 
-
   def createNode(self, nodePath, **properties):
     return CeresNode.create(self, nodePath, **properties)
-
 
   def store(self, nodePath, datapoints):
     node = self.getNode(nodePath)
@@ -127,7 +116,6 @@ class CeresTree:
 
     node.write(datapoints)
 
-
   def fetch(self, nodePath, fromTime, untilTime):
     node = self.getNode(nodePath)
 
@@ -135,7 +123,6 @@ class CeresTree:
       raise NodeNotFound("the node '%s' does not exist in this tree" % nodePath)
 
     return node.read(fromTime, untilTime)
-
 
 
 class CeresNode(object):
@@ -152,11 +139,9 @@ class CeresNode(object):
     self.sliceCache = None
     self.sliceCachingBehavior = DEFAULT_SLICE_CACHING_BEHAVIOR
 
-
   def __repr__(self):
     return "<CeresNode[0x%x]: %s>" % (id(self), self.nodePath)
   __str__ = __repr__
-
 
   @classmethod
   def create(cls, tree, nodePath, **properties):
@@ -176,11 +161,9 @@ class CeresNode(object):
 
     return node
 
-
   @staticmethod
   def isNodeDir(path):
-    return isdir(path) and exists( join(path, '.ceres-node') )
-
+    return isdir(path) and exists(join(path, '.ceres-node'))
 
   @classmethod
   def fromFilesystemPath(cls, fsPath):
@@ -198,25 +181,21 @@ class CeresNode(object):
       if dirPath == '/':
         raise ValueError("the path '%s' is not in a ceres tree" % fsPath)
 
-
   @property
   def slice_info(self):
-    return [ (slice.startTime, slice.endTime, slice.timeStep) for slice in self.slices ]
-
+    return [(slice.startTime, slice.endTime, slice.timeStep) for slice in self.slices]
 
   def readMetadata(self):
-    metadata = json.load( open(self.metadataFile, 'r') )
-    self.timeStep = int( metadata['timeStep'] )
+    metadata = json.load(open(self.metadataFile, 'r'))
+    self.timeStep = int(metadata['timeStep'])
     return metadata
 
-
   def writeMetadata(self, metadata):
-    self.timeStep = int( metadata['timeStep'] )
+    self.timeStep = int(metadata['timeStep'])
 
     f = open(self.metadataFile, 'w')
     json.dump(metadata, f)
     f.close()
-
 
   @property
   def slices(self):
@@ -233,7 +212,7 @@ class CeresNode(object):
 
     else:
       if self.sliceCachingBehavior == 'all':
-        self.sliceCache = [ CeresSlice(self, *info) for info in self.readSlices() ]
+        self.sliceCache = [CeresSlice(self, *info) for info in self.readSlices()]
         for slice in self.sliceCache:
           yield slice
 
@@ -253,7 +232,6 @@ class CeresNode(object):
       else:
         raise ValueError("invalid caching behavior configured '%s'" % self.sliceCachingBehavior)
 
-
   def readSlices(self):
     if not exists(self.fsPath):
       raise NodeDeleted()
@@ -262,11 +240,10 @@ class CeresNode(object):
     for filename in os.listdir(self.fsPath):
       if filename.endswith('.slice'):
         startTime, timeStep = filename[:-6].split('@')
-        slice_info.append( (int(startTime), int(timeStep)) )
+        slice_info.append((int(startTime), int(timeStep)))
 
     slice_info.sort(reverse=True)
     return slice_info
-
 
   def setSliceCachingBehavior(self, behavior):
     behavior = behavior.lower()
@@ -276,10 +253,8 @@ class CeresNode(object):
     self.sliceCachingBehavior = behavior
     self.sliceCache = None
 
-
   def clearSliceCache(self):
     self.sliceCache = None
-
 
   def hasDataForInterval(self, fromTime, untilTime):
     slices = list(self.slices)
@@ -289,19 +264,18 @@ class CeresNode(object):
     earliestData = slices[-1].startTime
     latestData = slices[0].endTime
 
-    return ( (fromTime is None) or (fromTime < latestData) ) and \
-           ( (untilTime is None) or (untilTime > earliestData) )
-
+    return ((fromTime is None) or (fromTime < latestData)) and \
+           ((untilTime is None) or (untilTime > earliestData))
 
   def read(self, fromTime, untilTime):
     if self.timeStep is None:
       self.readMetadata()
 
     # Normalize the timestamps to fit proper intervals
-    fromTime  = int( fromTime - (fromTime % self.timeStep) + self.timeStep )
-    untilTime = int( untilTime - (untilTime % self.timeStep) + self.timeStep )
+    fromTime = int(fromTime - (fromTime % self.timeStep) + self.timeStep)
+    untilTime = int(untilTime - (untilTime % self.timeStep) + self.timeStep)
 
-    sliceBoundary = None # to know when to split up queries across slices
+    sliceBoundary = None  # to know when to split up queries across slices
     resultValues = []
     earliestData = None
 
@@ -316,7 +290,7 @@ class CeresNode(object):
         earliestData = series.startTime
 
         rightMissing = (untilTime - series.endTime) / self.timeStep
-        rightNulls   = [ None for i in range(rightMissing - len(resultValues)) ]
+        rightNulls = [None for i in range(rightMissing - len(resultValues))]
         resultValues = series.values + rightNulls + resultValues
         break
 
@@ -336,7 +310,7 @@ class CeresNode(object):
         earliestData = series.startTime
 
         rightMissing = (requestUntilTime - series.endTime) / self.timeStep
-        rightNulls   = [ None for i in range(rightMissing) ]
+        rightNulls = [None for i in range(rightMissing)]
         resultValues = series.values + rightNulls + resultValues
 
       # this is the right-side boundary on the next iteration
@@ -345,16 +319,15 @@ class CeresNode(object):
     # The end of the requested interval predates all slices
     if earliestData is None:
       missing = int(untilTime - fromTime) / self.timeStep
-      resultValues = [ None for i in range(missing) ]
+      resultValues = [None for i in range(missing)]
 
     # Left pad nulls if the start of the requested interval predates all slices
     else:
       leftMissing = (earliestData - fromTime) / self.timeStep
-      leftNulls = [ None for i in range(leftMissing) ]
+      leftNulls = [None for i in range(leftMissing)]
       resultValues = leftNulls + resultValues
 
     return TimeSeriesData(fromTime, untilTime, self.timeStep, resultValues)
-
 
   def write(self, datapoints):
     if self.timeStep is None:
@@ -364,14 +337,14 @@ class CeresNode(object):
       return
 
     sequences = self.compact(datapoints)
-    needsEarlierSlice = [] # keep track of sequences that precede all existing slices
+    needsEarlierSlice = []  # keep track of sequences that precede all existing slices
 
     while sequences:
       sequence = sequences.pop()
-      timestamps = [ t for t,v in sequence ]
+      timestamps = [t for t,v in sequence]
       beginningTime = timestamps[0]
       endingTime = timestamps[-1]
-      sliceBoundary = None # used to prevent writing sequences across slice boundaries
+      sliceBoundary = None  # used to prevent writing sequences across slice boundaries
       slicesExist = False
 
       for slice in self.slices:
@@ -385,7 +358,8 @@ class CeresNode(object):
           if sliceBoundary is None:
             sequenceWithinSlice = sequence
           else:
-            boundaryIndex = bisect_left(timestamps, sliceBoundary) # index of highest timestamp that doesn't exceed sliceBoundary
+            # index of highest timestamp that doesn't exceed sliceBoundary
+            boundaryIndex = bisect_left(timestamps, sliceBoundary)
             sequenceWithinSlice = sequence[:boundaryIndex]
 
           try:
@@ -396,13 +370,15 @@ class CeresNode(object):
             self.sliceCache = None
           except SliceDeleted:
             self.sliceCache = None
-            self.write(datapoints) # recurse to retry
+            self.write(datapoints)  # recurse to retry
             return
 
           break
 
-        elif endingTime >= slice.startTime: # sequence straddles the current slice, write the right side
-          boundaryIndex = bisect_left(timestamps, slice.startTime) # index of lowest timestamp that doesn't preceed slice.startTime
+        # sequence straddles the current slice, write the right side
+        elif endingTime >= slice.startTime:
+          # index of lowest timestamp that doesn't preceed slice.startTime
+          boundaryIndex = bisect_left(timestamps, slice.startTime)
           sequenceWithinSlice = sequence[boundaryIndex:]
           leftover = sequence[:boundaryIndex]
           sequences.append(leftover)
@@ -423,31 +399,30 @@ class CeresNode(object):
       slice.write(sequence)
       self.sliceCache = None
 
-
   def compact(self, datapoints):
-    datapoints = sorted( (int(timestamp), float(value))
+    datapoints = sorted((int(timestamp), float(value))
                          for timestamp, value in datapoints
-                         if value is not None )
+                         if value is not None)
     sequences = []
     sequence = []
-    minimumTimestamp = 0 # used to avoid duplicate intervals
+    minimumTimestamp = 0  # used to avoid duplicate intervals
 
     for timestamp, value in datapoints:
-      timestamp -= timestamp % self.timeStep # round it down to a proper interval
+      timestamp -= timestamp % self.timeStep  # round it down to a proper interval
 
       if not sequence:
-        sequence.append( (timestamp, value) )
+        sequence.append((timestamp, value))
 
       else:
-        if not timestamp > minimumTimestamp: #drop duplicate intervals
+        if not timestamp > minimumTimestamp:  # drop duplicate intervals
           continue
 
-        if timestamp == sequence[-1][0] + self.timeStep: # append contiguous datapoints
-          sequence.append( (timestamp, value) )
+        if timestamp == sequence[-1][0] + self.timeStep:  # append contiguous datapoints
+          sequence.append((timestamp, value))
 
-        else: # start a new sequence if not contiguous
+        else:  # start a new sequence if not contiguous
           sequences.append(sequence)
-          sequence = [ (timestamp, value) ]
+          sequence = [(timestamp, value)]
 
       minimumTimestamp = timestamp
 
@@ -455,7 +430,6 @@ class CeresNode(object):
       sequences.append(sequence)
 
     return sequences
-
 
 
 class CeresSlice(object):
@@ -467,26 +441,21 @@ class CeresSlice(object):
     self.timeStep = timeStep
     self.fsPath = join(node.fsPath, '%d@%d.slice' % (startTime, timeStep))
 
-
   def __repr__(self):
     return "<CeresSlice[0x%x]: %s>" % (id(self), self.fsPath)
   __str__ = __repr__
-
 
   @property
   def isEmpty(self):
     return getsize(self.fsPath) == 0
 
-
   @property
   def endTime(self):
     return self.startTime + ((getsize(self.fsPath) / DATAPOINT_SIZE) * self.timeStep)
 
-
   @property
   def mtime(self):
     return getmtime(self.fsPath)
-
 
   @classmethod
   def create(cls, node, startTime, timeStep):
@@ -496,15 +465,14 @@ class CeresSlice(object):
     os.chmod(slice.fsPath, SLICE_PERMS)
     return slice
 
-
   def read(self, fromTime, untilTime):
-    timeOffset  = int(fromTime) - self.startTime
+    timeOffset = int(fromTime) - self.startTime
 
     if timeOffset < 0:
       raise InvalidRequest("requested time range (%d, %d) preceeds this slice: %d" % (fromTime, untilTime, self.startTime))
 
     pointOffset = timeOffset / self.timeStep
-    byteOffset  = pointOffset * DATAPOINT_SIZE
+    byteOffset = pointOffset * DATAPOINT_SIZE
 
     if byteOffset >= getsize(self.fsPath):
       raise NoData()
@@ -512,15 +480,15 @@ class CeresSlice(object):
     fileHandle = open(self.fsPath, 'rb')
     fileHandle.seek(byteOffset)
 
-    timeRange  = int(untilTime - fromTime)
+    timeRange = int(untilTime - fromTime)
     pointRange = timeRange / self.timeStep
-    byteRange  = pointRange * DATAPOINT_SIZE
+    byteRange = pointRange * DATAPOINT_SIZE
     packedValues = fileHandle.read(byteRange)
 
     pointsReturned = len(packedValues) / DATAPOINT_SIZE
     format = '!' + ('d' * pointsReturned)
     values = struct.unpack(format, packedValues)
-    values = [ v if not isnan(v) else None for v in values ]
+    values = [v if not isnan(v) else None for v in values]
 
     endTime = fromTime + (len(values) * self.timeStep)
     #print '[DEBUG slice.read] startTime=%s fromTime=%s untilTime=%s' % (self.startTime, fromTime, untilTime)
@@ -528,14 +496,13 @@ class CeresSlice(object):
     #print '[DEBUG slice.read] values = %s' % str(values)
     return TimeSeriesData(fromTime, endTime, self.timeStep, values)
 
-
   def write(self, sequence):
     beginningTime = sequence[0][0]
-    timeOffset  = beginningTime - self.startTime
+    timeOffset = beginningTime - self.startTime
     pointOffset = timeOffset / self.timeStep
-    byteOffset  = pointOffset * DATAPOINT_SIZE
+    byteOffset = pointOffset * DATAPOINT_SIZE
 
-    values = [ v for t,v in sequence ]
+    values = [v for t,v in sequence]
     format = '!' + ('d' * len(values))
     packedValues = struct.pack(format, *values)
 
@@ -548,7 +515,7 @@ class CeresSlice(object):
         raise
 
     byteGap = byteOffset - filesize
-    if byteGap > 0: # pad the allowable gap with nan's
+    if byteGap > 0:  # pad the allowable gap with nan's
 
       if byteGap > MAX_SLICE_GAP:
         raise SliceGapTooLarge()
@@ -566,7 +533,6 @@ class CeresSlice(object):
         raise
       fileHandle.write(packedValues)
 
-
   def deleteBefore(self, t):
     if not exists(self.fsPath):
       raise SliceDeleted()
@@ -577,7 +543,7 @@ class CeresSlice(object):
       return
 
     pointOffset = timeOffset / self.timeStep
-    byteOffset  = pointOffset * DATAPOINT_SIZE
+    byteOffset = pointOffset * DATAPOINT_SIZE
     if not byteOffset:
       return
 
@@ -596,10 +562,8 @@ class CeresSlice(object):
         os.unlink(self.fsPath)
         raise SliceDeleted()
 
-
   def __cmp__(self, other):
     return cmp(self.startTime, other.startTime)
-
 
 
 class TimeSeriesData(object):
@@ -630,7 +594,7 @@ class TimeSeriesData(object):
       if timestamp < self.startTime:
         continue
 
-      index = int( (timestamp - self.startTime) / self.timeStep )
+      index = int((timestamp - self.startTime) / self.timeStep)
 
       try:
         if self.values[index] is None:
@@ -653,8 +617,10 @@ class NoData(Exception):
 class NodeNotFound(Exception):
   pass
 
+
 class NodeDeleted(Exception):
   pass
+
 
 class InvalidRequest(Exception):
   pass
@@ -663,13 +629,14 @@ class InvalidRequest(Exception):
 class SliceGapTooLarge(Exception):
   "For internal use only"
 
+
 class SliceDeleted(Exception):
   pass
 
 
 def getTree(path):
-  while path not in ('/', ''):
-    if isdir( join(path, '.ceres-tree') ):
+  while path not in (os.sep, ''):
+    if isdir(join(path, '.ceres-tree')):
       return CeresTree(path)
 
     path = dirname(path)
