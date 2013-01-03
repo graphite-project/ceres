@@ -38,7 +38,15 @@ DEFAULT_SLICE_CACHING_BEHAVIOR = 'none'
 SLICE_PERMS = 0644
 DIR_PERMS = 0755
 
+
 class CeresTree:
+  """Represents a tree of Ceres metrics contained within a single path on disk
+  This is the primary Ceres API.
+
+  :param root: The directory root of the Ceres tree
+
+  See :func:`setDefaultSliceCachingBehavior` to adjust caching behavior
+  """
   def __init__(self, root):
     if isdir(root):
       self.root = abspath(root)
@@ -52,6 +60,14 @@ class CeresTree:
 
   @classmethod
   def createTree(cls, root, **props):
+    """Create and returns a new Ceres tree with the given properties
+
+    :param root: The root directory of the new Ceres tree
+    :keyword \*\*props: Arbitrary key-value properties to store as tree metadata
+
+    :returns: :class:`CeresTree`
+    """
+
     ceresDir = join(root, '.ceres-tree')
     if not isdir(ceresDir):
       os.makedirs(ceresDir, DIR_PERMS)
@@ -59,32 +75,47 @@ class CeresTree:
     for prop,value in props.items():
       propFile = join(ceresDir, prop)
       fh = open(propFile, 'w')
-      fh.write( str(value) )
+      fh.write(str(value))
       fh.close()
 
     return cls(root)
 
   def walk(self, **kwargs):
+    """Iterate through the nodes contained in this :class:`CeresTree`
+
+      :keyword \*\*kwargs: Options to pass to `os.walk`
+
+      :returns: An iterator yielding :class:`CeresNode` objects
+    """
     for (fsPath, subdirs, filenames) in os.walk(self.root, **kwargs):
       if CeresNode.isNodeDir(fsPath):
         nodePath = self.getNodePath(fsPath)
         yield CeresNode(self, nodePath, fsPath)
 
   def getFilesystemPath(self, nodePath):
-    return join(self.root, nodePath.replace('.', '/'))
+    """Get the on-disk path of a Ceres node given a metric name"""
+    return join(self.root, nodePath.replace('.', os.sep))
 
   def getNodePath(self, fsPath):
+    """Get the metric name of a Ceres node given the on-disk path"""
     fsPath = abspath(fsPath)
     if not fsPath.startswith(self.root):
       raise ValueError("path '%s' not beneath tree root '%s'" % (fsPath, self.root))
 
-    nodePath = fsPath[len(self.root):].strip('/').replace('/', '.')
+    nodePath = fsPath[len(self.root):].strip(os.sep).replace(os.sep, '.')
     return nodePath
 
   def hasNode(self, nodePath):
+    """Returns whether the Ceres tree contains the given metric"""
     return isdir(self.getFilesystemPath(nodePath))
 
   def getNode(self, nodePath):
+    """Returns a Ceres node given a metric name
+
+      :param nodePath: A metric name
+
+      :returns: :class:`CeresNode` or `None`
+    """
     if nodePath not in self.nodeCache:
       fsPath = self.getFilesystemPath(nodePath)
       if CeresNode.isNodeDir(fsPath):
@@ -95,6 +126,15 @@ class CeresTree:
     return self.nodeCache[nodePath]
 
   def find(self, nodePattern, fromTime=None, untilTime=None):
+    """Find nodes which match a wildcard pattern, optionally filtering on
+    a time range
+
+      :keyword nodePattern: A glob-style metric wildcard
+      :keyword fromTime: Optional interval start time in unix-epoch.
+      :keyword untilTime: Optional interval end time in unix-epoch.
+
+      :returns: An iterator yielding :class:`CeresNode` objects
+    """
     for fsPath in glob(self.getFilesystemPath(nodePattern)):
       if CeresNode.isNodeDir(fsPath):
         nodePath = self.getNodePath(fsPath)
@@ -106,9 +146,19 @@ class CeresTree:
           yield node
 
   def createNode(self, nodePath, **properties):
+    """Creates a new metric given a new metric name and optional per-node metadata
+      :keyword nodePath: The new metric name.
+      :keyword \*\*properties: Arbitrary key-value properties to store as metric metadata.
+
+      :returns: :class:`CeresNode`
+    """
     return CeresNode.create(self, nodePath, **properties)
 
   def store(self, nodePath, datapoints):
+    """Store a list of datapoints associated with a metric
+      :keyword nodePath: The metric name to write to
+      :keyword datapoints: A list of datapoint tuples: (timestamp, value)
+    """
     node = self.getNode(nodePath)
 
     if node is None:
@@ -117,6 +167,15 @@ class CeresTree:
     node.write(datapoints)
 
   def fetch(self, nodePath, fromTime, untilTime):
+    """Fetch data within a given interval from the given metric
+
+      :keyword nodePath: The metric name to fetch from
+      :keyword fromTime: Requested interval start time in unix-epoch.
+      :keyword untilTime: Requested interval end time in unix-epoch.
+
+      :returns: :class:`TimeSeriesData`
+      :raises: :class:`NodeNotFound`, :class:`InvalidRequest`, :class:`NoData`
+    """
     node = self.getNode(nodePath)
 
     if not node:

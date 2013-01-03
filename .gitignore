@@ -1,5 +1,6 @@
 MANIFEST
 build
+docs/_build
 dist
 *.log
 *.pyc
