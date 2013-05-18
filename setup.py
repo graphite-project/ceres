@@ -8,7 +8,7 @@ from distutils.core import setup
 setup(
   name='ceres',
   version='0.10.0',
-  url='https://launchpad.net/graphite',
+  url='https://github.com/graphite-project/ceres',
   author='Chris Davis',
   author_email='chrismd@gmail.com',
   license='Apache Software License 2.0',
