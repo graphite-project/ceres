@@ -486,6 +486,14 @@ class CeresNodeTest(TestCase):
       # 2nd slice has this range
       self.ceres_slices[1].write.assert_called_once_with(datapoints)
 
+  @patch('ceres.CeresSlice.create')
+  def test_write_within_previous_slice_doesnt_create(self, slice_create_mock):
+    datapoints = [ (720,0.0), (780,2.0) ]
+
+    with patch('ceres.CeresNode.slices', new=self.ceres_slices):
+      self.ceres_node.write(datapoints)
+      self.assertFalse(slice_create_mock.called)
+
   @patch('ceres.CeresSlice.create', new=Mock())
   def test_write_within_previous_slice_with_gaps(self):
     datapoints = [ (720,0.0), (840,2.0) ]
@@ -504,6 +512,20 @@ class CeresNodeTest(TestCase):
       self.ceres_node.write(datapoints)
       self.ceres_slices[0].write.assert_called_once_with(datapoints[2:4])
       self.ceres_slices[1].write.assert_called_once_with(datapoints[0:2])
+
+  @patch('ceres.CeresSlice.create')
+  def test_write_before_earliest_slice_creates_new(self, slice_create_mock):
+    datapoints = [ (300, 0.0) ]
+    with patch('ceres.CeresNode.slices', new=self.ceres_slices):
+      self.ceres_node.write(datapoints)
+      slice_create_mock.assert_called_once_with(self.ceres_node, 300, 60)
+
+  @patch('ceres.CeresSlice.create')
+  def test_write_before_earliest_slice_writes_to_new_one(self, slice_create_mock):
+    datapoints = [ (300, 0.0) ]
+    with patch('ceres.CeresNode.slices', new=self.ceres_slices):
+      self.ceres_node.write(datapoints)
+      slice_create_mock.return_value.write.assert_called_once_with(datapoints)
 
   @patch('ceres.CeresSlice.create')
   def test_create_during_write_clears_slice_cache(self, slice_create_mock):

@@ -414,6 +414,7 @@ class CeresNode(object):
 
         # truncate sequence so it doesn't cross the slice boundaries
         if beginningTime >= slice.startTime:
+          print slice.startTime
           if sliceBoundary is None:
             sequenceWithinSlice = sequence
           else:
@@ -432,21 +433,26 @@ class CeresNode(object):
             self.write(datapoints)  # recurse to retry
             return
 
+          sequence = []
           break
 
         # sequence straddles the current slice, write the right side
+        # left side will be taken up in the next slice down
         elif endingTime >= slice.startTime:
           # index of lowest timestamp that doesn't preceed slice.startTime
           boundaryIndex = bisect_left(timestamps, slice.startTime)
           sequenceWithinSlice = sequence[boundaryIndex:]
-          leftover = sequence[:boundaryIndex]
-          sequences.append(leftover)
+          # write the leftovers on the next earlier slice
+          sequence = sequence[:boundaryIndex]
           slice.write(sequenceWithinSlice)
 
-        else:
-          needsEarlierSlice.append(sequence)
+        if not sequence:
+          break
 
         sliceBoundary = slice.startTime
+
+      else: # list exhausted with stuff still to write
+        needsEarlierSlice.append(sequence)
 
       if not slicesExist:
         sequences.append(sequence)
@@ -456,7 +462,7 @@ class CeresNode(object):
     for sequence in needsEarlierSlice:
       slice = CeresSlice.create(self, int(sequence[0][0]), self.timeStep)
       slice.write(sequence)
-      self.sliceCache = None
+      self.clearSliceCache()
 
   def compact(self, datapoints):
     datapoints = sorted((int(timestamp), float(value))
