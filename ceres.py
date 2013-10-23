@@ -439,7 +439,7 @@ class CeresNode(object):
         # sequence straddles the current slice, write the right side
         # left side will be taken up in the next slice down
         elif endingTime >= slice.startTime:
-          # index of lowest timestamp that doesn't preceed slice.startTime
+          # index of lowest timestamp that doesn't precede slice.startTime
           boundaryIndex = bisect_left(timestamps, slice.startTime)
           sequenceWithinSlice = sequence[boundaryIndex:]
           # write the leftovers on the next earlier slice
@@ -534,7 +534,7 @@ class CeresSlice(object):
     timeOffset = int(fromTime) - self.startTime
 
     if timeOffset < 0:
-      raise InvalidRequest("requested time range (%d, %d) preceeds this slice: %d" % (fromTime, untilTime, self.startTime))
+      raise InvalidRequest("requested time range (%d, %d) precedes this slice: %d" % (fromTime, untilTime, self.startTime))
 
     pointOffset = timeOffset / self.timeStep
     byteOffset = pointOffset * DATAPOINT_SIZE
