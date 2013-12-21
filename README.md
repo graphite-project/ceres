@@ -8,6 +8,7 @@ See also [Whisper][]
 
 [Graphite]: https://github.com/graphite-project
 [Graphite Web]: https://github.com/graphite-project/graphite-web
+[Carbon]: https://github.com/graphite-project/carbon
 [Whisper]: https://github.com/graphite-project/whisper
 [Ceres]: https://github.com/graphite-project/ceres
 
