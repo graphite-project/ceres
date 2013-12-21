@@ -39,7 +39,7 @@ SLICE_PERMS = 0644
 DIR_PERMS = 0755
 
 
-class CeresTree:
+class CeresTree(object):
   """Represents a tree of Ceres metrics contained within a single path on disk
   This is the primary Ceres API.
 
