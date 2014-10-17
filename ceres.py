@@ -583,11 +583,10 @@ class CeresSlice(object):
 
     byteGap = byteOffset - filesize
     if byteGap > 0:  # pad the allowable gap with nan's
-
-      if byteGap > MAX_SLICE_GAP:
+      pointGap = byteGap / DATAPOINT_SIZE
+      if pointGap > MAX_SLICE_GAP:
         raise SliceGapTooLarge()
       else:
-        pointGap = byteGap / DATAPOINT_SIZE
         packedGap = PACKED_NAN * pointGap
         packedValues = packedGap + packedValues
         byteOffset -= byteGap
