@@ -438,8 +438,8 @@ or `none` (See :func:`slices`)
       self.readMetadata()
 
     # Normalize the timestamps to fit proper intervals
-    fromTime = int(fromTime - (fromTime % self.timeStep) + self.timeStep)
-    untilTime = int(untilTime - (untilTime % self.timeStep) + self.timeStep)
+    fromTime = int(fromTime - (fromTime % self.timeStep))
+    untilTime = int(untilTime - (untilTime % self.timeStep))
 
     sliceBoundary = None  # to know when to split up queries across slices
     resultValues = []
