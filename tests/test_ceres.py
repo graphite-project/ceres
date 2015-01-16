@@ -1,12 +1,16 @@
 from unittest import TestCase
 from mock import ANY, Mock, call, mock_open, patch
+from os import path
 
-from ceres import *
+from ceres import CeresNode, CeresSlice, CeresTree
+from ceres import DEFAULT_SLICE_CACHING_BEHAVIOR, DEFAULT_TIMESTEP, DIR_PERMS
+from ceres import getTree, NodeDeleted, NodeNotFound, TimeSeriesData
 
 
 def fetch_mock_open_writes(open_mock):
   handle = open_mock()
-  return ''.join([ c[0][0] for c in handle.write.call_args_list])
+  return ''.join([c[0][0] for c in handle.write.call_args_list])
+
 
 class ModuleFunctionsTest(TestCase):
   @patch('ceres.isdir', new=Mock(return_value=False))
@@ -112,8 +116,8 @@ class CeresTreeTest(TestCase):
       "bar_prop": "bar_value"}
     with patch('__builtin__.open', mock_open()) as open_mock:
       CeresTree.createTree('/graphite/storage/ceres', **props)
-      for (prop,value) in props.items():
-        open_mock.assert_any_call(join('/graphite/storage/ceres', '.ceres-tree', prop), 'w')
+      for (prop, value) in props.items():
+        open_mock.assert_any_call(path.join('/graphite/storage/ceres', '.ceres-tree', prop), 'w')
         open_mock.return_value.write.assert_any_call(value)
 
   @patch('ceres.abspath', new=Mock(side_effect=lambda x: x))
@@ -222,12 +226,15 @@ class CeresNodeTest(TestCase):
     with patch('ceres.isdir', new=Mock(return_value=True)):
       with patch('ceres.exists', new=Mock(return_value=True)):
         self.ceres_tree = CeresTree('/graphite/storage/ceres')
-        self.ceres_node = CeresNode(self.ceres_tree, 'sample_metric', '/graphite/storage/ceres/sample_metric')
+        self.ceres_node = CeresNode(
+            self.ceres_tree,
+            'sample_metric',
+            '/graphite/storage/ceres/sample_metric')
         self.ceres_node.timeStep = 60
 
     slice_configs = [
-      ( 1200, 1800, 60 ),
-      ( 600, 1200, 60 )]
+      (1200, 1800, 60),
+      (600, 1200, 60)]
 
     self.ceres_slices = []
     for start, end, step in slice_configs:
@@ -238,15 +245,17 @@ class CeresNodeTest(TestCase):
 
       self.ceres_slices.append(slice_mock)
 
-
   def test_init_sets_default_cache_behavior(self):
-    ceres_node = CeresNode(self.ceres_tree, 'sample_metric', '/graphite/storage/ceres/sample_metric')
+    ceres_node = CeresNode(
+        self.ceres_tree,
+        'sample_metric',
+        '/graphite/storage/ceres/sample_metric')
     self.assertEqual(DEFAULT_SLICE_CACHING_BEHAVIOR, ceres_node.sliceCachingBehavior)
 
   @patch('ceres.os.makedirs', new=Mock())
   @patch('ceres.CeresNode.writeMetadata')
   def test_create_sets_a_default_timestep(self, write_metadata_mock):
-    ceres_node = CeresNode.create(self.ceres_tree, 'sample_metric')
+    CeresNode.create(self.ceres_tree, 'sample_metric')
     write_metadata_mock.assert_called_with(dict(timeStep=DEFAULT_TIMESTEP))
 
   @patch('ceres.os.makedirs', new=Mock())
@@ -296,7 +305,7 @@ class CeresNodeTest(TestCase):
       return Mock(spec=CeresSlice)
 
     self.ceres_node.setSliceCachingBehavior('all')
-    cached_contents = [ mock_slice for c in range(4) ]
+    cached_contents = [mock_slice for c in range(4)]
     self.ceres_node.sliceCache = cached_contents
     with patch('ceres.CeresNode.readSlices') as read_slices_mock:
       slice_list = list(self.ceres_node.slices)
@@ -321,7 +330,7 @@ class CeresNodeTest(TestCase):
     cached_contents = Mock(spec=CeresSlice)
     self.ceres_node.sliceCache = cached_contents
 
-    read_slices_mock = Mock(return_value=[(0,60)])
+    read_slices_mock = Mock(return_value=[(0, 60)])
     with patch('ceres.CeresNode.readSlices', new=read_slices_mock):
       slice_iter = self.ceres_node.slices
       slice_iter.next()
@@ -337,7 +346,7 @@ class CeresNodeTest(TestCase):
 
   def test_slices_reads_from_disk_when_behavior_is_none(self):
     self.ceres_node.setSliceCachingBehavior('none')
-    read_slices_mock = Mock(return_value=[(0,60)])
+    read_slices_mock = Mock(return_value=[(0, 60)])
     with patch('ceres.CeresNode.readSlices', new=read_slices_mock):
       slice_iter = self.ceres_node.slices
       slice_iter.next()
@@ -346,7 +355,7 @@ class CeresNodeTest(TestCase):
 
   def test_slices_reads_from_disk_when_cache_empty_and_behavior_all(self):
     self.ceres_node.setSliceCachingBehavior('all')
-    read_slices_mock = Mock(return_value=[(0,60)])
+    read_slices_mock = Mock(return_value=[(0, 60)])
     with patch('ceres.CeresNode.readSlices', new=read_slices_mock):
       slice_iter = self.ceres_node.slices
       slice_iter.next()
@@ -355,7 +364,7 @@ class CeresNodeTest(TestCase):
 
   def test_slices_reads_from_disk_when_cache_empty_and_behavior_latest(self):
     self.ceres_node.setSliceCachingBehavior('all')
-    read_slices_mock = Mock(return_value=[(0,60)])
+    read_slices_mock = Mock(return_value=[(0, 60)])
     with patch('ceres.CeresNode.readSlices', new=read_slices_mock):
       slice_iter = self.ceres_node.slices
       slice_iter.next()
@@ -377,8 +386,8 @@ class CeresNodeTest(TestCase):
     listdir_mock = Mock(return_value=['0@60.slice', '0@300.slice'])
     with patch('ceres.os.listdir', new=listdir_mock):
       slice_infos = self.ceres_node.readSlices()
-      self.assertTrue((0,60) in slice_infos)
-      self.assertTrue((0,300) in slice_infos)
+      self.assertTrue((0, 60) in slice_infos)
+      self.assertTrue((0, 300) in slice_infos)
 
   @patch('ceres.exists', new=Mock(return_Value=True))
   def test_read_slices_reverse_sorts_by_time(self):
@@ -391,24 +400,24 @@ class CeresNodeTest(TestCase):
 
     with patch('ceres.os.listdir', new=listdir_mock):
       slice_infos = self.ceres_node.readSlices()
-      slice_timestamps = [ s[0] for s in slice_infos ]
-      self.assertEqual([600,320,120,0,0], slice_timestamps)
+      slice_timestamps = [s[0] for s in slice_infos]
+      self.assertEqual([600, 320, 120, 0, 0], slice_timestamps)
 
   def test_no_data_exists_if_no_slices_exist(self):
     with patch('ceres.CeresNode.readSlices', new=Mock(return_value=[])):
-      self.assertFalse(self.ceres_node.hasDataForInterval(0,60))
+      self.assertFalse(self.ceres_node.hasDataForInterval(0, 60))
 
   def test_no_data_exists_if_no_slices_exist_and_no_time_specified(self):
     with patch('ceres.CeresNode.readSlices', new=Mock(return_value=[])):
-      self.assertFalse(self.ceres_node.hasDataForInterval(None,None))
+      self.assertFalse(self.ceres_node.hasDataForInterval(None, None))
 
   def test_data_exists_if_slices_exist_and_no_time_specified(self):
     with patch('ceres.CeresNode.slices', new=self.ceres_slices):
-      self.assertTrue(self.ceres_node.hasDataForInterval(None,None))
+      self.assertTrue(self.ceres_node.hasDataForInterval(None, None))
 
   def test_data_exists_if_slice_covers_interval_completely(self):
     with patch('ceres.CeresNode.slices', new=[self.ceres_slices[0]]):
-      self.assertTrue(self.ceres_node.hasDataForInterval(1200,1800))
+      self.assertTrue(self.ceres_node.hasDataForInterval(1200, 1800))
 
   def test_data_exists_if_slice_covers_interval_end(self):
     with patch('ceres.CeresNode.slices', new=[self.ceres_slices[0]]):
@@ -430,20 +439,20 @@ class CeresNodeTest(TestCase):
     self.assertEqual([], self.ceres_node.compact([]))
 
   def test_compact_filters_null_values(self):
-    self.assertEqual([], self.ceres_node.compact([(60,None)]))
+    self.assertEqual([], self.ceres_node.compact([(60, None)]))
 
   def test_compact_rounds_timestamps_down_to_step(self):
-    self.assertEqual([[(600,0)]], self.ceres_node.compact([(605,0)]))
+    self.assertEqual([[(600, 0)]], self.ceres_node.compact([(605, 0)]))
 
   def test_compact_drops_duplicate_timestamps(self):
-    datapoints = [ (600, 0), (600, 0) ]
+    datapoints = [(600, 0), (600, 0)]
     compacted = self.ceres_node.compact(datapoints)
     self.assertEqual([[(600, 0)]], compacted)
 
   def test_compact_groups_contiguous_points(self):
-    datapoints = [ (600, 0), (660, 0), (840,0) ]
+    datapoints = [(600, 0), (660, 0), (840, 0)]
     compacted = self.ceres_node.compact(datapoints)
-    self.assertEqual([[(600, 0), (660,0)], [(840,0)]], compacted)
+    self.assertEqual([[(600, 0), (660, 0)], [(840, 0)]], compacted)
 
   def test_write_noops_if_no_datapoints(self):
     with patch('ceres.CeresNode.slices', new=self.ceres_slices):
@@ -467,7 +476,7 @@ class CeresNodeTest(TestCase):
 
   @patch('ceres.CeresSlice.create', new=Mock())
   def test_write_within_first_slice_with_gaps(self):
-    datapoints = [ (1200,0.0), (1320,2.0) ]
+    datapoints = [(1200, 0.0), (1320, 2.0)]
 
     with patch('ceres.CeresNode.slices', new=self.ceres_slices):
       self.ceres_node.write(datapoints)
@@ -478,7 +487,7 @@ class CeresNodeTest(TestCase):
 
   @patch('ceres.CeresSlice.create', new=Mock())
   def test_write_within_previous_slice(self):
-    datapoints = [ (720,0.0), (780,2.0) ]
+    datapoints = [(720, 0.0), (780, 2.0)]
 
     with patch('ceres.CeresNode.slices', new=self.ceres_slices):
       self.ceres_node.write(datapoints)
@@ -488,7 +497,7 @@ class CeresNodeTest(TestCase):
 
   @patch('ceres.CeresSlice.create')
   def test_write_within_previous_slice_doesnt_create(self, slice_create_mock):
-    datapoints = [ (720,0.0), (780,2.0) ]
+    datapoints = [(720, 0.0), (780, 2.0)]
 
     with patch('ceres.CeresNode.slices', new=self.ceres_slices):
       self.ceres_node.write(datapoints)
@@ -496,7 +505,7 @@ class CeresNodeTest(TestCase):
 
   @patch('ceres.CeresSlice.create', new=Mock())
   def test_write_within_previous_slice_with_gaps(self):
-    datapoints = [ (720,0.0), (840,2.0) ]
+    datapoints = [(720, 0.0), (840, 2.0)]
 
     with patch('ceres.CeresNode.slices', new=self.ceres_slices):
       self.ceres_node.write(datapoints)
@@ -506,7 +515,7 @@ class CeresNodeTest(TestCase):
 
   @patch('ceres.CeresSlice.create', new=Mock())
   def test_write_across_slice_boundaries(self):
-    datapoints = [ (1080,0.0), (1140,1.0), (1200, 2.0), (1260, 3.0) ]
+    datapoints = [(1080, 0.0), (1140, 1.0), (1200, 2.0), (1260, 3.0)]
 
     with patch('ceres.CeresNode.slices', new=self.ceres_slices):
       self.ceres_node.write(datapoints)
@@ -515,14 +524,14 @@ class CeresNodeTest(TestCase):
 
   @patch('ceres.CeresSlice.create')
   def test_write_before_earliest_slice_creates_new(self, slice_create_mock):
-    datapoints = [ (300, 0.0) ]
+    datapoints = [(300, 0.0)]
     with patch('ceres.CeresNode.slices', new=self.ceres_slices):
       self.ceres_node.write(datapoints)
       slice_create_mock.assert_called_once_with(self.ceres_node, 300, 60)
 
   @patch('ceres.CeresSlice.create')
   def test_write_before_earliest_slice_writes_to_new_one(self, slice_create_mock):
-    datapoints = [ (300, 0.0) ]
+    datapoints = [(300, 0.0)]
     with patch('ceres.CeresNode.slices', new=self.ceres_slices):
       self.ceres_node.write(datapoints)
       slice_create_mock.return_value.write.assert_called_once_with(datapoints)
@@ -531,7 +540,7 @@ class CeresNodeTest(TestCase):
   def test_create_during_write_clears_slice_cache(self, slice_create_mock):
     self.ceres_node.setSliceCachingBehavior('all')
     self.ceres_node.sliceCache = self.ceres_slices
-    datapoints = [ (300, 0.0) ]
+    datapoints = [(300, 0.0)]
     with patch('ceres.CeresNode.slices', new=self.ceres_slices):
       self.ceres_node.write(datapoints)
       self.assertEquals(None, self.ceres_node.sliceCache)
@@ -542,10 +551,11 @@ class CeresSliceTest(TestCase):
     with patch('ceres.isdir', new=Mock(return_value=True)):
       with patch('ceres.exists', new=Mock(return_value=True)):
         self.ceres_tree = CeresTree('/graphite/storage/ceres')
-        self.ceres_node = CeresNode(self.ceres_tree, 'sample_metric', '/graphite/storage/ceres/sample_metric')
+        self.ceres_node = CeresNode(
+            self.ceres_tree,
+            'sample_metric',
+            '/graphite/storage/ceres/sample_metric')
 
   def test_init_sets_fspath_name(self):
     ceres_slice = CeresSlice(self.ceres_node, 0, 60)
     self.assertTrue(ceres_slice.fsPath.endswith('0@60.slice'))
-
-

@@ -72,7 +72,7 @@ class CeresTree(object):
     if not isdir(ceresDir):
       os.makedirs(ceresDir, DIR_PERMS)
 
-    for prop,value in props.items():
+    for prop, value in props.items():
       propFile = join(ceresDir, prop)
       fh = open(propFile, 'w')
       fh.write(str(value))
@@ -209,11 +209,11 @@ class CeresNode(object):
     os.makedirs(fsPath, DIR_PERMS)
 
     # Create the initial metadata
-    self.timeStep = properties['timeStep'] = properties.get('timeStep', DEFAULT_TIMESTEP)
     node = cls(tree, nodePath, fsPath)
     node.writeMetadata(properties)
 
     # Create the initial data file
+    #timeStep = properties['timeStep'] = properties.get('timeStep', DEFAULT_TIMESTEP)
     #now = int( time.time() )
     #baseTime = now - (now % timeStep)
     #slice = CeresSlice.create(node, baseTime, timeStep)
@@ -400,7 +400,7 @@ class CeresNode(object):
 
     while sequences:
       sequence = sequences.pop()
-      timestamps = [t for t,v in sequence]
+      timestamps = [t for t, v in sequence]
       beginningTime = timestamps[0]
       endingTime = timestamps[-1]
       sliceBoundary = None  # used to prevent writing sequences across slice boundaries
@@ -451,7 +451,7 @@ class CeresNode(object):
 
         sliceBoundary = slice.startTime
 
-      else: # list exhausted with stuff still to write
+      else:  # list exhausted with stuff still to write
         needsEarlierSlice.append(sequence)
 
       if not slicesExist:
@@ -466,8 +466,7 @@ class CeresNode(object):
 
   def compact(self, datapoints):
     datapoints = sorted((int(timestamp), float(value))
-                         for timestamp, value in datapoints
-                         if value is not None)
+                        for timestamp, value in datapoints if value is not None)
     sequences = []
     sequence = []
     minimumTimestamp = 0  # used to avoid duplicate intervals
@@ -534,7 +533,8 @@ class CeresSlice(object):
     timeOffset = int(fromTime) - self.startTime
 
     if timeOffset < 0:
-      raise InvalidRequest("requested time range (%d, %d) precedes this slice: %d" % (fromTime, untilTime, self.startTime))
+      raise InvalidRequest("requested time range (%d, %d) precedes this slice: %d" % (
+          fromTime, untilTime, self.startTime))
 
     pointOffset = timeOffset / self.timeStep
     byteOffset = pointOffset * DATAPOINT_SIZE
@@ -556,7 +556,8 @@ class CeresSlice(object):
     values = [v if not isnan(v) else None for v in values]
 
     endTime = fromTime + (len(values) * self.timeStep)
-    #print '[DEBUG slice.read] startTime=%s fromTime=%s untilTime=%s' % (self.startTime, fromTime, untilTime)
+    #print '[DEBUG slice.read] startTime=%s fromTime=%s untilTime=%s' % (
+    #    self.startTime, fromTime, untilTime)
     #print '[DEBUG slice.read] timeInfo = (%s, %s, %s)' % (fromTime, endTime, self.timeStep)
     #print '[DEBUG slice.read] values = %s' % str(values)
     return TimeSeriesData(fromTime, endTime, self.timeStep, values)
@@ -567,7 +568,7 @@ class CeresSlice(object):
     pointOffset = timeOffset / self.timeStep
     byteOffset = pointOffset * DATAPOINT_SIZE
 
-    values = [v for t,v in sequence]
+    values = [v for t, v in sequence]
     format = '!' + ('d' * len(values))
     packedValues = struct.pack(format, *values)
 
@@ -594,7 +595,8 @@ class CeresSlice(object):
       try:
         fileHandle.seek(byteOffset)
       except IOError:
-        print " IOError: fsPath=%s byteOffset=%d size=%d sequence=%s" % (self.fsPath, byteOffset, filesize, sequence)
+        print " IOError: fsPath=%s byteOffset=%d size=%d sequence=%s" % (
+            self.fsPath, byteOffset, filesize, sequence)
         raise
       fileHandle.write(packedValues)
 
