@@ -209,7 +209,7 @@ class CeresNode(object):
     os.makedirs(fsPath, DIR_PERMS)
 
     # Create the initial metadata
-    timeStep = properties['timeStep'] = properties.get('timeStep', DEFAULT_TIMESTEP)
+    self.timeStep = properties['timeStep'] = properties.get('timeStep', DEFAULT_TIMESTEP)
     node = cls(tree, nodePath, fsPath)
     node.writeMetadata(properties)
 
