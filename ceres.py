@@ -208,12 +208,13 @@ class CeresNode(object):
     fsPath = tree.getFilesystemPath(nodePath)
     os.makedirs(fsPath, DIR_PERMS)
 
+    properties['timeStep'] = properties.get('timeStep', DEFAULT_TIMESTEP)
     # Create the initial metadata
     node = cls(tree, nodePath, fsPath)
     node.writeMetadata(properties)
 
     # Create the initial data file
-    #timeStep = properties['timeStep'] = properties.get('timeStep', DEFAULT_TIMESTEP)
+    #timeStep = properties['timeStep']
     #now = int( time.time() )
     #baseTime = now - (now % timeStep)
     #slice = CeresSlice.create(node, baseTime, timeStep)
