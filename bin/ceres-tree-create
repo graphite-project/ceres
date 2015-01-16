@@ -22,7 +22,7 @@ props = {}
 for arg in args[1:]:
   prop, value = arg.split('=', 1)
 
-  try: # convert numeric types
+  try:  # convert numeric types
     value = float(value)
   except:
     try:

@@ -48,7 +48,7 @@ for datapoint in args[1:]:
     timestamp = float(timestamp)
 
   value = float(value)
-  datapoints.append( (timestamp, value) )
+  datapoints.append((timestamp, value))
 
 datapoints.sort()
 

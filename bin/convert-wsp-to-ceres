@@ -3,7 +3,7 @@
 import sys
 import os
 import time
-from os.path import exists, dirname, basename, isfile, isdir, join
+from os.path import dirname, basename, isdir, join
 from optparse import OptionParser
 import whisper
 import ceres
@@ -23,7 +23,7 @@ if not args:
 
 wsp_file = args[0]
 wsp_dir = dirname(wsp_file)
-metric_name = basename(wsp_file)[:-4] #strip .wsp
+metric_name = basename(wsp_file)[:-4]  # strip .wsp
 ceres_node_dir = join(wsp_dir, metric_name)
 
 if isdir(ceres_node_dir):
@@ -42,8 +42,8 @@ if options.verbose:
   print "extracting datapoints from wsp file"
 
 timeInfo, values = whisper.fetch(wsp_file, fromTime=0, untilTime=time.time())
-datapoints = zip( xrange(*timeInfo), values )
-datapoints = [ (t,v) for (t,v) in datapoints if v is not None ]
+datapoints = zip(xrange(*timeInfo), values)
+datapoints = [(t, v) for (t, v) in datapoints if v is not None]
 
 if options.verbose:
   print "creating ceres node %s" % nodePath
