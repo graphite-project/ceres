@@ -214,10 +214,10 @@ class CeresNode(object):
     node.writeMetadata(properties)
 
     # Create the initial data file
-    #timeStep = properties['timeStep']
-    #now = int( time.time() )
-    #baseTime = now - (now % timeStep)
-    #slice = CeresSlice.create(node, baseTime, timeStep)
+    # timeStep = properties['timeStep']
+    # now = int( time.time() )
+    # baseTime = now - (now % timeStep)
+    # slice = CeresSlice.create(node, baseTime, timeStep)
 
     return node
 
@@ -557,10 +557,10 @@ class CeresSlice(object):
     values = [v if not isnan(v) else None for v in values]
 
     endTime = fromTime + (len(values) * self.timeStep)
-    #print '[DEBUG slice.read] startTime=%s fromTime=%s untilTime=%s' % (
+    # print '[DEBUG slice.read] startTime=%s fromTime=%s untilTime=%s' % (
     #    self.startTime, fromTime, untilTime)
-    #print '[DEBUG slice.read] timeInfo = (%s, %s, %s)' % (fromTime, endTime, self.timeStep)
-    #print '[DEBUG slice.read] values = %s' % str(values)
+    # print '[DEBUG slice.read] timeInfo = (%s, %s, %s)' % (fromTime, endTime, self.timeStep)
+    # print '[DEBUG slice.read] values = %s' % str(values)
     return TimeSeriesData(fromTime, endTime, self.timeStep, values)
 
   def write(self, sequence):

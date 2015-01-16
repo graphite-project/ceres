@@ -8,4 +8,4 @@ install:
     - python setup.py install
 script:
     - nosetests
-    - flake8 --max-line-length=100 --ignore=E111,E121 ceres.py tests/*.py bin/*.py
+    - flake8 --max-line-length=100 --ignore=E111,E121 ceres.py tests/*.py bin/*
