@@ -592,7 +592,7 @@ class CeresSlice(object):
         packedValues = packedGap + packedValues
         byteOffset -= byteGap
 
-    with file(self.fsPath, 'r+b') as fileHandle:
+    with open(self.fsPath, 'r+b') as fileHandle:
       try:
         fileHandle.seek(byteOffset)
       except IOError:
@@ -616,7 +616,7 @@ class CeresSlice(object):
       return
 
     self.node.clearSliceCache()
-    with file(self.fsPath, 'r+b') as fileHandle:
+    with open(self.fsPath, 'r+b') as fileHandle:
       fileHandle.seek(byteOffset)
       fileData = fileHandle.read()
       if fileData:
