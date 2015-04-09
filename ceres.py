@@ -516,10 +516,13 @@ node's `timeStep` will be treated as duplicates and dropped.
       beginningTime = timestamps[0]
       endingTime = timestamps[-1]
       sliceBoundary = None  # used to prevent writing sequences across slice boundaries
+      slicesExist = False
 
       for slice in self.slices:
         if slice.timeStep != self.timeStep:
           continue
+
+        slicesExist = True
 
         # truncate sequence so it doesn't cross the slice boundaries
         if beginningTime >= slice.startTime:
@@ -554,10 +557,18 @@ node's `timeStep` will be treated as duplicates and dropped.
           sequence = sequence[:boundaryIndex]
           slice.write(sequenceWithinSlice)
 
+        if not sequence:
+          break
+
         sliceBoundary = slice.startTime
 
       else:  # slice list exhausted with stuff still to write
         needsEarlierSlice.append(sequence)
+
+      if not slicesExist:
+        sequences.append(sequence)
+        needsEarlierSlice = sequences
+        break
 
     for sequence in needsEarlierSlice:
       slice = CeresSlice.create(self, int(sequence[0][0]), self.timeStep)
