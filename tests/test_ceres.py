@@ -1,6 +1,10 @@
+try:
+  from unittest2 import TestCase, skip
+except ImportError:
+  from unittest import TestCase, skip
+
 import errno
 
-from unittest import TestCase, skip
 from mock import ANY, Mock, call, mock_open, patch
 from os import path
 
