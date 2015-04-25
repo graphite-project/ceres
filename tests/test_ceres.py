@@ -11,13 +11,30 @@ from os import path
 from ceres import CeresNode, CeresSlice, CeresTree
 from ceres import DATAPOINT_SIZE, DEFAULT_SLICE_CACHING_BEHAVIOR, DEFAULT_TIMESTEP, DIR_PERMS,\
     MAX_SLICE_GAP
-from ceres import getTree, CorruptNode, NodeDeleted, NodeNotFound, SliceDeleted, SliceGapTooLarge,\
-    TimeSeriesData
+from ceres import getTree, CorruptNode, NoData, NodeDeleted, NodeNotFound, SliceDeleted,\
+    SliceGapTooLarge, TimeSeriesData
 
 
 def fetch_mock_open_writes(open_mock):
   handle = open_mock()
   return ''.join([c[0][0] for c in handle.write.call_args_list])
+
+
+def make_slice_mock(start, end, step):
+  slice_mock = Mock(spec=CeresSlice)
+  slice_mock.startTime = start
+  slice_mock.endTime = end
+  slice_mock.timeStep = step
+
+  def side_effect(*args, **kwargs):
+    startTime, endTime = args
+    result_start = max(startTime, start)
+    result_end = min(endTime, end)
+    points = (result_end - result_start) / step
+    return TimeSeriesData(result_start, result_end, step, [0] * points)
+
+  slice_mock.read.side_effect = side_effect
+  return slice_mock
 
 
 class ModuleFunctionsTest(TestCase):
@@ -246,11 +263,7 @@ class CeresNodeTest(TestCase):
 
     self.ceres_slices = []
     for start, end, step in slice_configs:
-      slice_mock = Mock(spec=CeresSlice)
-      slice_mock.startTime = start
-      slice_mock.endTime = end
-      slice_mock.timeStep = step
-
+      slice_mock = make_slice_mock(start, end, step)
       self.ceres_slices.append(slice_mock)
 
   def test_init_sets_default_cache_behavior(self):
@@ -585,6 +598,91 @@ class CeresNodeTest(TestCase):
       self.ceres_node.timeStep = 10
       self.ceres_node.write(datapoints)
       slice_create_mock.assert_called_once_with(self.ceres_node, 600, 10)
+
+
+class CeresNodeReadTest(TestCase):
+  def setUp(self):
+    with patch('ceres.isdir', new=Mock(return_value=True)):
+      with patch('ceres.exists', new=Mock(return_value=True)):
+        self.ceres_tree = CeresTree('/graphite/storage/ceres')
+        self.ceres_node = CeresNode(
+            self.ceres_tree,
+            'sample_metric',
+            '/graphite/storage/ceres/sample_metric')
+        self.ceres_node.timeStep = 60
+
+    slice_configs = [
+      (1200, 1800, 60),
+      (600, 1200, 60)]
+
+    self.ceres_slices = []
+    for start, end, step in slice_configs:
+      slice_mock = make_slice_mock(start, end, step)
+      self.ceres_slices.append(slice_mock)
+
+    self.ceres_slices_patch = patch('ceres.CeresNode.slices', new=iter(self.ceres_slices))
+    self.ceres_slices_patch.start()
+
+  def tearDown(self):
+    self.ceres_slices_patch.stop()
+
+  def test_read_loads_metadata_if_timestep_unknown(self):
+    with patch('ceres.CeresNode.readMetadata', new=Mock(side_effect=Exception))\
+      as read_metadata_mock:
+      self.ceres_node.timeStep = None
+      try:  # Raise Exception as a cheap exit out of the function once we have the call we want
+        self.ceres_node.read(600, 660)
+      except Exception:
+        pass
+      read_metadata_mock.assert_called_once_with()
+
+  @skip
+  def test_read_normalizes_from_time(self):
+    self.ceres_node.read(1210, 1260)
+    self.ceres_slices[0].read.assert_called_once_with(1200, 1260)
+
+  @skip
+  def test_read_normalizes_until_time(self):
+    self.ceres_node.read(1200, 1270)
+    self.ceres_slices[0].read.assert_called_once_with(1200, 1260)
+
+  def test_read_returns_empty_time_series_if_before_slices(self):
+    result = self.ceres_node.read(0, 300)
+    self.assertEqual([None] * 5, result.values)
+
+  def test_read_returns_empty_time_series_if_slice_has_no_data(self):
+    self.ceres_slices[0].read.side_effect = NoData
+    result = self.ceres_node.read(1200, 1500)
+    self.assertEqual([None] * 5, result.values)
+
+  @skip
+  def test_read_pads_points_missing_before_series(self):
+    result = self.ceres_node.read(540, 1200)
+    self.assertEqual(None, result.values[0])
+
+  def test_read_pads_points_missing_after_series(self):
+    result = self.ceres_node.read(1200, 1860)
+    self.assertEqual(None, result.values[-1])
+
+  @skip
+  def test_read_goes_across_slices(self):
+    self.ceres_node.read(900, 1500)
+    self.ceres_slices[0].read.assert_called_once_with(1200, 1500)
+    self.ceres_slices[1].read.assert_called_once_with(900, 1200)
+
+  def test_read_across_slices_merges_results(self):
+    result = self.ceres_node.read(900, 1500)
+    self.assertEqual([0] * 10, result.values)
+
+  def test_read_pads_points_missing_after_series_across_slices(self):
+    result = self.ceres_node.read(900, 1860)
+    self.assertEqual(None, result.values[-1])
+
+  @skip
+  def test_read_pads_points_missing_between_slices(self):
+    self.ceres_slices[1] = make_slice_mock(600, 1140, 60)
+    result = self.ceres_node.read(900, 1500)
+    self.assertEqual([0] * 4 + [None] + [0] * 5, result.values)
 
 
 class CeresSliceTest(TestCase):
