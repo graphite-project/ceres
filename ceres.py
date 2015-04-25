@@ -446,28 +446,28 @@ or `none` (See :func:`slices`)
     earliestData = None
 
     for slice in self.slices:
+      # If there was a prior slice covering the requested interval, dont ask for that data again
+      if (sliceBoundary is not None) and untilTime > sliceBoundary:
+        requestUntilTime = sliceBoundary
+      else:
+        requestUntilTime = untilTime
+
       # if the requested interval starts after the start of this slice
       if fromTime >= slice.startTime:
         try:
-          series = slice.read(fromTime, untilTime)
+          series = slice.read(fromTime, requestUntilTime)
         except NoData:
           break
 
         earliestData = series.startTime
 
-        rightMissing = (untilTime - series.endTime) / self.timeStep
-        rightNulls = [None for i in range(rightMissing - len(resultValues))]
+        rightMissing = (requestUntilTime - series.endTime) / self.timeStep
+        rightNulls = [None for i in range(rightMissing)]
         resultValues = series.values + rightNulls + resultValues
         break
 
       # or if slice contains data for part of the requested interval
       elif untilTime >= slice.startTime:
-        # Split the request up if it straddles a slice boundary
-        if (sliceBoundary is not None) and untilTime > sliceBoundary:
-          requestUntilTime = sliceBoundary
-        else:
-          requestUntilTime = untilTime
-
         try:
           series = slice.read(slice.startTime, requestUntilTime)
         except NoData:
