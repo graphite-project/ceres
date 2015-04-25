@@ -45,7 +45,9 @@ class CeresTree(object):
 
   :param root: The directory root of the Ceres tree
 
-  See :func:`setDefaultSliceCachingBehavior` to adjust caching behavior
+  .. note:: Use :func:`createTree` to initialize and instantiate a new CeresTree
+
+  .. seealso:: :func:`setDefaultSliceCachingBehavior` to adjust caching behavior
   """
   def __init__(self, root):
     if isdir(root):
@@ -63,7 +65,7 @@ class CeresTree(object):
     """Create and returns a new Ceres tree with the given properties
 
     :param root: The root directory of the new Ceres tree
-    :keyword \*\*props: Arbitrary key-value properties to store as tree metadata
+    :param \*\*props: Arbitrary key-value properties to store as tree metadata
 
     :returns: :class:`CeresTree`
     """
@@ -83,7 +85,7 @@ class CeresTree(object):
   def walk(self, **kwargs):
     """Iterate through the nodes contained in this :class:`CeresTree`
 
-      :keyword \*\*kwargs: Options to pass to `os.walk`
+      :param \*\*kwargs: Options to pass to :func:`os.walk`
 
       :returns: An iterator yielding :class:`CeresNode` objects
     """
@@ -93,11 +95,22 @@ class CeresTree(object):
         yield CeresNode(self, nodePath, fsPath)
 
   def getFilesystemPath(self, nodePath):
-    """Get the on-disk path of a Ceres node given a metric name"""
+    """Get the on-disk path of a Ceres node given a metric name
+
+    :param nodePath: A metric name e.g. ``carbon.agents.graphite-a.cpuUsage``
+
+    :returns: The Ceres node path on disk"""
     return join(self.root, nodePath.replace('.', os.sep))
 
   def getNodePath(self, fsPath):
-    """Get the metric name of a Ceres node given the on-disk path"""
+    """Get the metric name of a Ceres node given the on-disk path
+
+    :param fsPath: The filesystem path of a Ceres node
+
+    :returns: A metric name
+
+    :raises ValueError: When `fsPath` is not a path within the :class:`CeresTree`
+    """
     fsPath = abspath(fsPath)
     if not fsPath.startswith(self.root):
       raise ValueError("path '%s' not beneath tree root '%s'" % (fsPath, self.root))
@@ -106,7 +119,11 @@ class CeresTree(object):
     return nodePath
 
   def hasNode(self, nodePath):
-    """Returns whether the Ceres tree contains the given metric"""
+    """Returns whether the Ceres tree contains the given metric
+
+    :param nodePath: A metric name e.g. ``carbon.agents.graphite-a.cpuUsage``
+
+    :returns: `True` or `False`"""
     return isdir(self.getFilesystemPath(nodePath))
 
   def getNode(self, nodePath):
@@ -129,9 +146,9 @@ class CeresTree(object):
     """Find nodes which match a wildcard pattern, optionally filtering on
     a time range
 
-      :keyword nodePattern: A glob-style metric wildcard
-      :keyword fromTime: Optional interval start time in unix-epoch.
-      :keyword untilTime: Optional interval end time in unix-epoch.
+      :param nodePattern: A glob-style metric wildcard
+      :param fromTime: Optional interval start time in unix-epoch.
+      :param untilTime: Optional interval end time in unix-epoch.
 
       :returns: An iterator yielding :class:`CeresNode` objects
     """
@@ -147,8 +164,8 @@ class CeresTree(object):
 
   def createNode(self, nodePath, **properties):
     """Creates a new metric given a new metric name and optional per-node metadata
-      :keyword nodePath: The new metric name.
-      :keyword \*\*properties: Arbitrary key-value properties to store as metric metadata.
+      :param nodePath: The new metric name.
+      :param \*\*properties: Arbitrary key-value properties to store as metric metadata.
 
       :returns: :class:`CeresNode`
     """
@@ -156,8 +173,8 @@ class CeresTree(object):
 
   def store(self, nodePath, datapoints):
     """Store a list of datapoints associated with a metric
-      :keyword nodePath: The metric name to write to
-      :keyword datapoints: A list of datapoint tuples: (timestamp, value)
+      :param nodePath: The metric name to write to e.g. ``carbon.agents.graphite-a.cpuUsage``
+      :param datapoints: A list of datapoint tuples: ``[(timestamp, value), ...]``
     """
     node = self.getNode(nodePath)
 
@@ -169,12 +186,12 @@ class CeresTree(object):
   def fetch(self, nodePath, fromTime, untilTime):
     """Fetch data within a given interval from the given metric
 
-      :keyword nodePath: The metric name to fetch from
-      :keyword fromTime: Requested interval start time in unix-epoch.
-      :keyword untilTime: Requested interval end time in unix-epoch.
+      :param nodePath: The metric name to fetch from
+      :param fromTime: Requested interval start time in unix-epoch.
+      :param untilTime: Requested interval end time in unix-epoch.
 
       :returns: :class:`TimeSeriesData`
-      :raises: :class:`NodeNotFound`, :class:`InvalidRequest`, :class:`NoData`
+      :raises: :class:`NodeNotFound`, :class:`InvalidRequest`
     """
     node = self.getNode(nodePath)
 
@@ -185,6 +202,20 @@ class CeresTree(object):
 
 
 class CeresNode(object):
+  """A :class:`CeresNode` represents a single time-series metric of a given `timeStep`
+(its seconds-per-point resolution) and containing arbitrary key-value metadata.
+
+A :class:`CeresNode` is associated with its most precise `timeStep`. This `timeStep` is the finest
+resolution that can be used for writing, though a :class:`CeresNode` can contain and read data with
+other, less-precise `timeStep` values in its underlying :class:`CeresSlice` data.
+
+  :param tree: The :class:`CeresTree` this node is associated with
+  :param nodePath: The name of the metric this node represents
+  :param fsPath: The filesystem path of this metric
+
+  .. note:: This class generally should be instantiated through use of :class:`CeresTree`. See
+            :func:`CeresTree.createNode` and :func:`CeresTree.getNode`
+  """
   __slots__ = ('tree', 'nodePath', 'fsPath',
                'metadataFile', 'timeStep',
                'sliceCache', 'sliceCachingBehavior')
@@ -204,6 +235,19 @@ class CeresNode(object):
 
   @classmethod
   def create(cls, tree, nodePath, **properties):
+    """Create a new :class:`CeresNode` on disk with the specified properties.
+
+    :param tree: The :class:`CeresTree` this node is associated with
+    :param nodePath: The name of the metric this node represents
+    :param \*\*properties: A set of key-value properties to be associated with this node
+
+A :class:`CeresNode` always has the `timeStep` property which is an integer value representing
+the precision of the node in seconds-per-datapoint. E.g. a value of ``60`` represents one datapoint
+per minute. If no `timeStep` is specified at creation, the value of ``ceres.DEFAULT_TIMESTEP`` is
+used
+
+    :returns: :class:`CeresNode`
+    """
     # Create the node directory
     fsPath = tree.getFilesystemPath(nodePath)
     os.makedirs(fsPath, DIR_PERMS)
@@ -223,10 +267,20 @@ class CeresNode(object):
 
   @staticmethod
   def isNodeDir(path):
+    """Tests whether the given path is a :class:`CeresNode`
+
+    :param path: Path to test
+    :returns `True` or `False`
+    """
     return isdir(path) and exists(join(path, '.ceres-node'))
 
   @classmethod
   def fromFilesystemPath(cls, fsPath):
+    """Instantiate a :class:`CeresNode` from the on-disk path of an existing node
+
+    :params fsPath: The filesystem path of an existing node
+    :returns: :class:`CeresNode`
+    """
     dirPath = dirname(fsPath)
 
     while True:
@@ -243,14 +297,29 @@ class CeresNode(object):
 
   @property
   def slice_info(self):
+    """A property providing a list of current information about each slice
+
+    :returns: ``[(startTime, endTime, timeStep), ...]``
+    """
     return [(slice.startTime, slice.endTime, slice.timeStep) for slice in self.slices]
 
   def readMetadata(self):
-    metadata = json.load(open(self.metadataFile, 'r'))
-    self.timeStep = int(metadata['timeStep'])
-    return metadata
+    """Update node metadata from disk
+
+    :raises: :class:`CorruptNode`
+    """
+    try:
+      metadata = json.load(open(self.metadataFile, 'r'))
+      self.timeStep = int(metadata['timeStep'])
+      return metadata
+    except (KeyError, IOError, ValueError), e:
+      raise CorruptNode(self, "Unable to parse node metadata: %s" % e.message)
 
   def writeMetadata(self, metadata):
+    """Writes new metadata to disk
+
+    :param metadata: a JSON-serializable dict of node metadata
+    """
     self.timeStep = int(metadata['timeStep'])
 
     f = open(self.metadataFile, 'w')
@@ -259,6 +328,20 @@ class CeresNode(object):
 
   @property
   def slices(self):
+    """A property providing access to information about this node's underlying slices. Because this
+information is accessed in every read and write, a caching mechanism is provided. Cache behavior is
+set using :func:`setSliceCachingBehavior` and defaults to the value set in
+``DEFAULT_SLICE_CACHING_BEHAVIOR``
+
+The following behaviors are available:
+
+* `none` (default) - Slice information is read from the filesystem at every access
+* `latest` - The latest slice is served from cache, all others from disk. Reads and writes of recent
+  data are most likely to be in the latest slice
+* `all` - All slices are cached. The cache is only refreshed on new slice creation or deletion
+
+    :returns: ``[(startTime, timeStep), ...]``
+    """
     if self.sliceCache:
       if self.sliceCachingBehavior == 'all':
         for slice in self.sliceCache:
@@ -293,6 +376,10 @@ class CeresNode(object):
         raise ValueError("invalid caching behavior configured '%s'" % self.sliceCachingBehavior)
 
   def readSlices(self):
+    """Read slice information from disk
+
+    :returns: ``[(startTime, timeStep), ...]``
+    """
     if not exists(self.fsPath):
       raise NodeDeleted()
 
@@ -306,6 +393,10 @@ class CeresNode(object):
     return slice_info
 
   def setSliceCachingBehavior(self, behavior):
+    """Set slice caching behavior.
+
+    :param behavior: See :func:`slices` for valid behavior values
+    """
     behavior = behavior.lower()
     if behavior not in ('none', 'all', 'latest'):
       raise ValueError("invalid caching behavior '%s'" % behavior)
@@ -314,9 +405,18 @@ class CeresNode(object):
     self.sliceCache = None
 
   def clearSliceCache(self):
+    """Clear slice cache, forcing a refresh from disk at the next access"""
     self.sliceCache = None
 
   def hasDataForInterval(self, fromTime, untilTime):
+    """Test whether this node has any data in the given time interval. All slices are inspected
+which will trigger a read of slice information from disk if slice cache behavior is set to `latest`
+or `none` (See :func:`slices`)
+
+    :param fromTime: Beginning of interval in unix epoch seconds
+    :param untilTime: End of interval in unix epoch seconds
+    :returns `True` or `False`
+    """
     slices = list(self.slices)
     if not slices:
       return False
@@ -328,6 +428,12 @@ class CeresNode(object):
            ((untilTime is None) or (untilTime > earliestData))
 
   def read(self, fromTime, untilTime):
+    """Read data from underlying slices and return as a single time-series
+
+    :param fromTime: Beginning of interval in unix epoch seconds
+    :param untilTime: End of interval in unix epoch seconds
+    :returns: :class:`TimeSeriesData`
+    """
     if self.timeStep is None:
       self.readMetadata()
 
@@ -390,6 +496,11 @@ class CeresNode(object):
     return TimeSeriesData(fromTime, untilTime, self.timeStep, resultValues)
 
   def write(self, datapoints):
+    """Writes datapoints to underlying slices. Datapoints that round to the same timestamp for the
+node's `timeStep` will be treated as duplicates and dropped.
+
+      :param datapoints: List of datapoint tuples ``[(timestamp, value), ...]``
+    """
     if self.timeStep is None:
       self.readMetadata()
 
@@ -415,7 +526,6 @@ class CeresNode(object):
 
         # truncate sequence so it doesn't cross the slice boundaries
         if beginningTime >= slice.startTime:
-          print slice.startTime
           if sliceBoundary is None:
             sequenceWithinSlice = sequence
           else:
@@ -452,7 +562,7 @@ class CeresNode(object):
 
         sliceBoundary = slice.startTime
 
-      else:  # list exhausted with stuff still to write
+      else:  # slice list exhausted with stuff still to write
         needsEarlierSlice.append(sequence)
 
       if not slicesExist:
@@ -466,6 +576,14 @@ class CeresNode(object):
       self.clearSliceCache()
 
   def compact(self, datapoints):
+    """Compacts datapoints into a list of contiguous, sorted lists of points with duplicate
+timestamps and null values removed
+
+      :param datapoints: List of datapoint tuples ``[(timestamp, value), ...]``
+
+      :returns: A list of lists of contiguous sorted datapoint tuples
+                ``[[(timestamp, value), ...], ...]``
+    """
     datapoints = sorted((int(timestamp), float(value))
                         for timestamp, value in datapoints if value is not None)
     sequences = []

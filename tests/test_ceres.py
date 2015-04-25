@@ -1,13 +1,18 @@
+try:
+  from unittest2 import TestCase, skip
+except ImportError:
+  from unittest import TestCase, skip
+
 import errno
 
-from unittest import TestCase
 from mock import ANY, Mock, call, mock_open, patch
 from os import path
 
 from ceres import CeresNode, CeresSlice, CeresTree
 from ceres import DATAPOINT_SIZE, DEFAULT_SLICE_CACHING_BEHAVIOR, DEFAULT_TIMESTEP, DIR_PERMS,\
     MAX_SLICE_GAP
-from ceres import getTree, NodeDeleted, NodeNotFound, SliceDeleted, SliceGapTooLarge, TimeSeriesData
+from ceres import getTree, CorruptNode, NodeDeleted, NodeNotFound, SliceDeleted, SliceGapTooLarge,\
+    TimeSeriesData
 
 
 def fetch_mock_open_writes(open_mock):
@@ -287,6 +292,10 @@ class CeresNodeTest(TestCase):
     open_mock().read.assert_called_once()
     self.assertEqual(60, self.ceres_node.timeStep)
 
+  def test_read_metadata_returns_corrupt_if_json_error(self):
+    with patch('__builtin__.open', mock_open()):
+      self.assertRaises(CorruptNode, self.ceres_node.readMetadata)
+
   def test_set_slice_caching_behavior_validates_names(self):
     self.ceres_node.setSliceCachingBehavior('none')
     self.assertEquals('none', self.ceres_node.sliceCachingBehavior)
@@ -450,7 +459,13 @@ class CeresNodeTest(TestCase):
   def test_compact_drops_duplicate_timestamps(self):
     datapoints = [(600, 0), (600, 0)]
     compacted = self.ceres_node.compact(datapoints)
-    self.assertEqual([[(600, 0)]], compacted)
+    self.assertEqual([[(600, 0.0)]], compacted)
+
+  @skip("XXX: Ceres should keep the last of duplicate points")
+  def test_compact_keeps_last_seen_duplicate_timestamp(self):
+    datapoints = [(600, 0), (600, 1)]
+    compacted = self.ceres_node.compact(datapoints)
+    self.assertEqual([[(600, 1.0)]], compacted)
 
   def test_compact_groups_contiguous_points(self):
     datapoints = [(600, 0), (660, 0), (840, 0)]
@@ -540,6 +555,14 @@ class CeresNodeTest(TestCase):
       slice_create_mock.return_value.write.assert_called_once_with(datapoints)
 
   @patch('ceres.CeresSlice.create')
+  def test_write_before_earliest_slice_writes_next_slice_too(self, slice_create_mock):
+    # slice 0 starts at 600
+    datapoints = [(540, 0.0), (600, 0.0)]
+    with patch('ceres.CeresNode.slices', new=self.ceres_slices):
+      self.ceres_node.write(datapoints)
+      self.ceres_slices[1].write.assert_called_once_with([datapoints[1]])
+
+  @patch('ceres.CeresSlice.create')
   def test_create_during_write_clears_slice_cache(self, slice_create_mock):
     self.ceres_node.setSliceCachingBehavior('all')
     self.ceres_node.sliceCache = self.ceres_slices
@@ -547,6 +570,21 @@ class CeresNodeTest(TestCase):
     with patch('ceres.CeresNode.slices', new=self.ceres_slices):
       self.ceres_node.write(datapoints)
       self.assertEquals(None, self.ceres_node.sliceCache)
+
+  @patch('ceres.CeresSlice.create')
+  def test_write_past_max_gap_size_creates(self, slice_create_mock):
+    datapoints = [(6000, 0.0)]
+    with patch('ceres.CeresNode.slices', new=self.ceres_slices):
+      with patch.object(self.ceres_slices[0], 'write', side_effect=SliceGapTooLarge):
+        self.ceres_node.write(datapoints)
+
+  @patch('ceres.CeresSlice.create')
+  def test_write_different_timestep_creates(self, slice_create_mock):
+    datapoints = [(600, 0.0)]
+    with patch('ceres.CeresNode.slices', new=self.ceres_slices):
+      self.ceres_node.timeStep = 10
+      self.ceres_node.write(datapoints)
+      slice_create_mock.assert_called_once_with(self.ceres_node, 600, 10)
 
 
 class CeresSliceTest(TestCase):
