@@ -636,12 +636,10 @@ class CeresNodeReadTest(TestCase):
         pass
       read_metadata_mock.assert_called_once_with()
 
-  @skip
   def test_read_normalizes_from_time(self):
     self.ceres_node.read(1210, 1260)
     self.ceres_slices[0].read.assert_called_once_with(1200, 1260)
 
-  @skip
   def test_read_normalizes_until_time(self):
     self.ceres_node.read(1200, 1270)
     self.ceres_slices[0].read.assert_called_once_with(1200, 1260)
@@ -655,16 +653,14 @@ class CeresNodeReadTest(TestCase):
     result = self.ceres_node.read(1200, 1500)
     self.assertEqual([None] * 5, result.values)
 
-  @skip
   def test_read_pads_points_missing_before_series(self):
     result = self.ceres_node.read(540, 1200)
-    self.assertEqual(None, result.values[0])
+    self.assertEqual([None] + [0] * 10, result.values)
 
   def test_read_pads_points_missing_after_series(self):
     result = self.ceres_node.read(1200, 1860)
     self.assertEqual(None, result.values[-1])
 
-  @skip
   def test_read_goes_across_slices(self):
     self.ceres_node.read(900, 1500)
     self.ceres_slices[0].read.assert_called_once_with(1200, 1500)
@@ -678,7 +674,6 @@ class CeresNodeReadTest(TestCase):
     result = self.ceres_node.read(900, 1860)
     self.assertEqual(None, result.values[-1])
 
-  @skip
   def test_read_pads_points_missing_between_slices(self):
     self.ceres_slices[1] = make_slice_mock(600, 1140, 60)
     result = self.ceres_node.read(900, 1500)
