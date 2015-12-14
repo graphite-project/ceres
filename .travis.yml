@@ -2,6 +2,7 @@
 language: python
 python:
     - 2.7
+    - "pypy"
 install:
     - pip install -r test_requirements.txt --use-mirrors
     - python setup.py install
@@ -9,3 +10,5 @@ script:
     - nosetests
 #XXX Once flake8 updates its deps to pep8 > 1.6.0, E111 changes number to E114
     - flake8 --max-line-length=100 --ignore=E111,E121 ceres.py tests/*.py bin/*
+
+sudo: false
