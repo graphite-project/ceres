@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 
 import sys
 from optparse import OptionParser
@@ -23,6 +24,6 @@ tree = CeresTree(root_dir)
 
 for node in tree.find(pattern, fromTime=options.fromtime, untilTime=options.untiltime):
   if options.fspath:
-    print node.fsPath
+    print(node.fsPath)
   else:
-    print node.nodePath
+    print(node.nodePath)

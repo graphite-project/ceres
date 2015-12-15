@@ -14,17 +14,18 @@
 #
 #
 
-# Ceres requires Python 2.6 or newer
+# Ceres requires Python 2.7 or newer
+import itertools
 import os
 import struct
 import json
 import errno
 from math import isnan
-from itertools import izip
 from os.path import isdir, exists, join, dirname, abspath, getsize, getmtime
 from glob import glob
 from bisect import bisect_left
 
+izip = getattr(itertools, 'izip', zip)
 
 TIMESTAMP_FORMAT = "!L"
 TIMESTAMP_SIZE = struct.calcsize(TIMESTAMP_FORMAT)
@@ -35,8 +36,8 @@ PACKED_NAN = struct.pack(DATAPOINT_FORMAT, NAN)
 MAX_SLICE_GAP = 80
 DEFAULT_TIMESTEP = 60
 DEFAULT_SLICE_CACHING_BEHAVIOR = 'none'
-SLICE_PERMS = 0644
-DIR_PERMS = 0755
+SLICE_PERMS = 0o644
+DIR_PERMS = 0o755
 
 
 class CeresTree(object):
@@ -312,8 +313,8 @@ used
       metadata = json.load(open(self.metadataFile, 'r'))
       self.timeStep = int(metadata['timeStep'])
       return metadata
-    except (KeyError, IOError, ValueError), e:
-      raise CorruptNode(self, "Unable to parse node metadata: %s" % e.message)
+    except (KeyError, IOError, ValueError) as e:
+      raise CorruptNode(self, "Unable to parse node metadata: %s" % e.args)
 
   def writeMetadata(self, metadata):
     """Writes new metadata to disk
@@ -461,7 +462,7 @@ or `none` (See :func:`slices`)
 
         earliestData = series.startTime
 
-        rightMissing = (requestUntilTime - series.endTime) / self.timeStep
+        rightMissing = (requestUntilTime - series.endTime) // self.timeStep
         rightNulls = [None for i in range(rightMissing)]
         resultValues = series.values + rightNulls + resultValues
         break
@@ -475,7 +476,7 @@ or `none` (See :func:`slices`)
 
         earliestData = series.startTime
 
-        rightMissing = (requestUntilTime - series.endTime) / self.timeStep
+        rightMissing = (requestUntilTime - series.endTime) // self.timeStep
         rightNulls = [None for i in range(rightMissing)]
         resultValues = series.values + rightNulls + resultValues
 
@@ -484,12 +485,12 @@ or `none` (See :func:`slices`)
 
     # The end of the requested interval predates all slices
     if earliestData is None:
-      missing = int(untilTime - fromTime) / self.timeStep
+      missing = int(untilTime - fromTime) // self.timeStep
       resultValues = [None for i in range(missing)]
 
     # Left pad nulls if the start of the requested interval predates all slices
     else:
-      leftMissing = (earliestData - fromTime) / self.timeStep
+      leftMissing = (earliestData - fromTime) // self.timeStep
       leftNulls = [None for i in range(leftMissing)]
       resultValues = leftNulls + resultValues
 
@@ -634,7 +635,7 @@ class CeresSlice(object):
 
   @property
   def endTime(self):
-    return self.startTime + ((getsize(self.fsPath) / DATAPOINT_SIZE) * self.timeStep)
+    return self.startTime + ((getsize(self.fsPath) // DATAPOINT_SIZE) * self.timeStep)
 
   @property
   def mtime(self):
@@ -655,7 +656,7 @@ class CeresSlice(object):
       raise InvalidRequest("requested time range (%d, %d) precedes this slice: %d" % (
           fromTime, untilTime, self.startTime))
 
-    pointOffset = timeOffset / self.timeStep
+    pointOffset = timeOffset // self.timeStep
     byteOffset = pointOffset * DATAPOINT_SIZE
 
     if byteOffset >= getsize(self.fsPath):
@@ -665,11 +666,11 @@ class CeresSlice(object):
     fileHandle.seek(byteOffset)
 
     timeRange = int(untilTime - fromTime)
-    pointRange = timeRange / self.timeStep
+    pointRange = timeRange // self.timeStep
     byteRange = pointRange * DATAPOINT_SIZE
     packedValues = fileHandle.read(byteRange)
 
-    pointsReturned = len(packedValues) / DATAPOINT_SIZE
+    pointsReturned = len(packedValues) // DATAPOINT_SIZE
     format = '!' + ('d' * pointsReturned)
     values = struct.unpack(format, packedValues)
     values = [v if not isnan(v) else None for v in values]
@@ -684,7 +685,7 @@ class CeresSlice(object):
   def write(self, sequence):
     beginningTime = sequence[0][0]
     timeOffset = beginningTime - self.startTime
-    pointOffset = timeOffset / self.timeStep
+    pointOffset = timeOffset // self.timeStep
     byteOffset = pointOffset * DATAPOINT_SIZE
 
     values = [v for t, v in sequence]
@@ -693,7 +694,7 @@ class CeresSlice(object):
 
     try:
       filesize = getsize(self.fsPath)
-    except OSError, e:
+    except OSError as e:
       if e.errno == errno.ENOENT:
         raise SliceDeleted()
       else:
@@ -701,7 +702,7 @@ class CeresSlice(object):
 
     byteGap = byteOffset - filesize
     if byteGap > 0:  # pad the allowable gap with nan's
-      pointGap = byteGap / DATAPOINT_SIZE
+      pointGap = byteGap // DATAPOINT_SIZE
       if pointGap > MAX_SLICE_GAP:
         raise SliceGapTooLarge()
       else:
@@ -713,8 +714,8 @@ class CeresSlice(object):
       try:
         fileHandle.seek(byteOffset)
       except IOError:
-        print " IOError: fsPath=%s byteOffset=%d size=%d sequence=%s" % (
-            self.fsPath, byteOffset, filesize, sequence)
+        # print " IOError: fsPath=%s byteOffset=%d size=%d sequence=%s" % (
+        #   self.fsPath, byteOffset, filesize, sequence)
         raise
       fileHandle.write(packedValues)
 
@@ -727,7 +728,7 @@ class CeresSlice(object):
     if timeOffset < 0:
       return
 
-    pointOffset = timeOffset / self.timeStep
+    pointOffset = timeOffset // self.timeStep
     byteOffset = pointOffset * DATAPOINT_SIZE
     if not byteOffset:
       return
@@ -747,8 +748,8 @@ class CeresSlice(object):
         os.unlink(self.fsPath)
         raise SliceDeleted()
 
-  def __cmp__(self, other):
-    return cmp(self.startTime, other.startTime)
+  def __lt__(self, other):
+    return self.startTime < other.startTime
 
 
 class TimeSeriesData(object):
@@ -762,7 +763,7 @@ class TimeSeriesData(object):
 
   @property
   def timestamps(self):
-    return xrange(self.startTime, self.endTime, self.timeStep)
+    return range(self.startTime, self.endTime, self.timeStep)
 
   def __iter__(self):
     return izip(self.timestamps, self.values)
@@ -779,7 +780,7 @@ class TimeSeriesData(object):
       if timestamp < self.startTime:
         continue
 
-      index = int((timestamp - self.startTime) / self.timeStep)
+      index = int((timestamp - self.startTime) // self.timeStep)
 
       try:
         if self.values[index] is None:

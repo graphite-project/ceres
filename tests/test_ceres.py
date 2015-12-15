@@ -1,12 +1,15 @@
-try:
-  from unittest2 import TestCase, skip
-except ImportError:
-  from unittest import TestCase, skip
+from unittest import TestCase, skip
 
 import errno
 
 from mock import ANY, Mock, call, mock_open, patch
 from os import path
+
+try:
+  import __builtin__ as builtins
+except ImportError:
+  import builtins
+
 
 from ceres import CeresNode, CeresSlice, CeresTree
 from ceres import DATAPOINT_SIZE, DEFAULT_SLICE_CACHING_BEHAVIOR, DEFAULT_TIMESTEP, DIR_PERMS,\
@@ -17,7 +20,11 @@ from ceres import getTree, CorruptNode, NoData, NodeDeleted, NodeNotFound, Slice
 
 def fetch_mock_open_writes(open_mock):
   handle = open_mock()
-  return ''.join([c[0][0] for c in handle.write.call_args_list])
+  # XXX Python3 compability since a write can be bytes or str
+  try:
+    return b''.join([c[0][0] for c in handle.write.call_args_list])
+  except TypeError:
+    return ''.join([c[0][0] for c in handle.write.call_args_list])
 
 
 def make_slice_mock(start, end, step):
@@ -30,7 +37,7 @@ def make_slice_mock(start, end, step):
     startTime, endTime = args
     result_start = max(startTime, start)
     result_end = min(endTime, end)
-    points = (result_end - result_start) / step
+    points = (result_end - result_start) // step
     return TimeSeriesData(result_start, result_end, step, [0] * points)
 
   slice_mock.read.side_effect = side_effect
@@ -56,7 +63,7 @@ class ModuleFunctionsTest(TestCase):
 
 class TimeSeriesDataTest(TestCase):
   def setUp(self):
-    self.time_series = TimeSeriesData(0, 50, 5, [float(x) for x in xrange(0, 10)])
+    self.time_series = TimeSeriesData(0, 50, 5, [float(x) for x in range(0, 10)])
 
   def test_timestamps_property(self):
     self.assertEqual(10, len(self.time_series.timestamps))
@@ -71,7 +78,7 @@ class TimeSeriesDataTest(TestCase):
 
   def test_merge_no_missing(self):
     # merge only has effect if time series has no gaps
-    other_series = TimeSeriesData(0, 25, 5, [float(x * x) for x in xrange(1, 6)])
+    other_series = TimeSeriesData(0, 25, 5, [float(x * x) for x in range(1, 6)])
     original_values = list(self.time_series)
     self.time_series.merge(other_series)
     self.assertEqual(original_values, list(self.time_series))
@@ -83,7 +90,7 @@ class TimeSeriesDataTest(TestCase):
 
   def test_merge_with_holes(self):
     values = []
-    for x in xrange(0, 10):
+    for x in range(0, 10):
       if x % 2 == 0:
         values.append(x)
       else:
@@ -115,7 +122,7 @@ class CeresTreeTest(TestCase):
   @patch('os.makedirs')
   def test_create_tree_new_dir(self, makedirs_mock, ceres_tree_init_mock):
     ceres_tree_init_mock.return_value = None
-    with patch('__builtin__.open', mock_open()) as open_mock:
+    with patch.object(builtins, 'open', mock_open()) as open_mock:
       CeresTree.createTree('/graphite/storage/ceres')
       makedirs_mock.assert_called_once_with('/graphite/storage/ceres/.ceres-tree', DIR_PERMS)
       self.assertFalse(open_mock.called)
@@ -126,7 +133,7 @@ class CeresTreeTest(TestCase):
   @patch('os.makedirs')
   def test_create_tree_existing_dir(self, makedirs_mock, ceres_tree_init_mock):
     ceres_tree_init_mock.return_value = None
-    with patch('__builtin__.open', mock_open()) as open_mock:
+    with patch.object(builtins, 'open', mock_open()) as open_mock:
       CeresTree.createTree('/graphite/storage/ceres')
       self.assertFalse(makedirs_mock.called)
       self.assertFalse(open_mock.called)
@@ -139,7 +146,7 @@ class CeresTreeTest(TestCase):
     props = {
       "foo_prop": "foo_value",
       "bar_prop": "bar_value"}
-    with patch('__builtin__.open', mock_open()) as open_mock:
+    with patch.object(builtins, 'open', mock_open()) as open_mock:
       CeresTree.createTree('/graphite/storage/ceres', **props)
       for (prop, value) in props.items():
         open_mock.assert_any_call(path.join('/graphite/storage/ceres', '.ceres-tree', prop), 'w')
@@ -290,7 +297,7 @@ class CeresNodeTest(TestCase):
 
     open_mock = mock_open()
     metadata = dict(timeStep=60, aggregationMethod='avg')
-    with patch('__builtin__.open', open_mock):
+    with patch.object(builtins, 'open', open_mock):
       self.ceres_node.writeMetadata(metadata)
     self.assertEquals(json.dumps(metadata), fetch_mock_open_writes(open_mock))
 
@@ -300,13 +307,13 @@ class CeresNodeTest(TestCase):
     metadata = dict(timeStep=60, aggregationMethod='avg')
     json_metadata = json.dumps(metadata)
     open_mock = mock_open(read_data=json_metadata)
-    with patch('__builtin__.open', open_mock):
+    with patch.object(builtins, 'open', open_mock):
       self.ceres_node.readMetadata()
     open_mock().read.assert_called_once()
     self.assertEqual(60, self.ceres_node.timeStep)
 
   def test_read_metadata_returns_corrupt_if_json_error(self):
-    with patch('__builtin__.open', mock_open()):
+    with patch.object(builtins, 'open', mock_open()):
       self.assertRaises(CorruptNode, self.ceres_node.readMetadata)
 
   def test_set_slice_caching_behavior_validates_names(self):
@@ -346,7 +353,7 @@ class CeresNodeTest(TestCase):
     read_slices_mock = Mock(return_value=[])
     with patch('ceres.CeresNode.readSlices', new=read_slices_mock):
       slice_iter = self.ceres_node.slices
-      self.assertEquals(cached_contents, slice_iter.next())
+      self.assertEquals(cached_contents, next(slice_iter))
       # We should be yielding cached before trying to read
       self.assertFalse(read_slices_mock.called)
 
@@ -358,12 +365,12 @@ class CeresNodeTest(TestCase):
     read_slices_mock = Mock(return_value=[(0, 60)])
     with patch('ceres.CeresNode.readSlices', new=read_slices_mock):
       slice_iter = self.ceres_node.slices
-      slice_iter.next()
+      next(slice_iter)
 
       # *now* we expect to read from disk
       try:
         while True:
-          slice_iter.next()
+          next(slice_iter)
       except StopIteration:
         pass
 
@@ -374,7 +381,7 @@ class CeresNodeTest(TestCase):
     read_slices_mock = Mock(return_value=[(0, 60)])
     with patch('ceres.CeresNode.readSlices', new=read_slices_mock):
       slice_iter = self.ceres_node.slices
-      slice_iter.next()
+      next(slice_iter)
 
     read_slices_mock.assert_called_once_with()
 
@@ -383,7 +390,7 @@ class CeresNodeTest(TestCase):
     read_slices_mock = Mock(return_value=[(0, 60)])
     with patch('ceres.CeresNode.readSlices', new=read_slices_mock):
       slice_iter = self.ceres_node.slices
-      slice_iter.next()
+      next(slice_iter)
 
     read_slices_mock.assert_called_once_with()
 
@@ -392,7 +399,7 @@ class CeresNodeTest(TestCase):
     read_slices_mock = Mock(return_value=[(0, 60)])
     with patch('ceres.CeresNode.readSlices', new=read_slices_mock):
       slice_iter = self.ceres_node.slices
-      slice_iter.next()
+      next(slice_iter)
 
     read_slices_mock.assert_called_once_with()
 
@@ -708,7 +715,7 @@ class CeresSliceTest(TestCase):
     self.assertRaises(SliceDeleted, ceres_slice.deleteBefore, 60)
 
   @patch('ceres.exists', Mock(return_value=True))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_delete_before_returns_if_time_earlier_than_start(self, open_mock):
     ceres_slice = CeresSlice(self.ceres_node, 300, 60)
     # File starts at timestamp 300, delete points before timestamp 60
@@ -716,14 +723,14 @@ class CeresSliceTest(TestCase):
     open_mock.assert_has_calls([])  # no calls
 
   @patch('ceres.exists', Mock(return_value=True))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_delete_before_returns_if_time_less_than_step_earlier_than_start(self, open_mock):
     ceres_slice = CeresSlice(self.ceres_node, 300, 60)
     ceres_slice.deleteBefore(299)
     open_mock.assert_has_calls([])
 
   @patch('ceres.exists', Mock(return_value=True))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_delete_before_returns_if_time_same_as_start(self, open_mock):
     ceres_slice = CeresSlice(self.ceres_node, 300, 60)
     ceres_slice.deleteBefore(300)
@@ -734,13 +741,13 @@ class CeresSliceTest(TestCase):
   def test_delete_before_clears_slice_cache(self):
     ceres_slice = CeresSlice(self.ceres_node, 300, 60)
     open_mock = mock_open(read_data='foo')  # needs to be non-null for this test
-    with patch('__builtin__.open', open_mock):
+    with patch.object(builtins, 'open', open_mock):
       with patch('ceres.CeresNode.clearSliceCache') as clear_slice_cache_mock:
         ceres_slice.deleteBefore(360)
         clear_slice_cache_mock.assert_called_once_with()
 
   @patch('ceres.exists', Mock(return_value=True))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_delete_before_deletes_file_if_no_more_data(self, open_mock):
     ceres_slice = CeresSlice(self.ceres_node, 300, 60)
     with patch('ceres.os.unlink') as unlink_mock:
@@ -752,7 +759,7 @@ class CeresSliceTest(TestCase):
 
   @patch('ceres.exists', Mock(return_value=True))
   @patch('ceres.os.unlink', Mock())
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_delete_before_raises_slice_deleted_if_no_more_data(self, open_mock):
     ceres_slice = CeresSlice(self.ceres_node, 300, 60)
     self.assertRaises(SliceDeleted, ceres_slice.deleteBefore, 360)
@@ -762,10 +769,21 @@ class CeresSliceTest(TestCase):
   def test_delete_before_seeks_to_time(self):
     ceres_slice = CeresSlice(self.ceres_node, 300, 60)
     open_mock = mock_open(read_data='foo')
-    with patch('__builtin__.open', open_mock) as open_mock:
+    with patch.object(builtins, 'open', open_mock) as open_mock:
       ceres_slice.deleteBefore(360)
       # Seek from 300 (start of file) to 360 (1 datapointpoint)
       open_mock.return_value.seek.assert_any_call(1 * DATAPOINT_SIZE)
+
+  @patch('ceres.exists', Mock(return_value=True))
+  def test_slices_are_sortable(self):
+    ceres_slices = [
+      CeresSlice(self.ceres_node, 300, 60),
+      CeresSlice(self.ceres_node, 600, 60),
+      CeresSlice(self.ceres_node, 0, 60)]
+
+    expected_order = [0, 300, 600]
+    result_order = [slice.startTime for slice in sorted(ceres_slices)]
+    self.assertEqual(expected_order, result_order)
 
 
 class CeresSliceWriteTest(TestCase):
@@ -788,7 +806,7 @@ class CeresSliceWriteTest(TestCase):
     self.assertRaises(SliceDeleted, self.ceres_slice.write, [(0, 0)])
 
   @patch('ceres.getsize', Mock(return_value=0))
-  @patch('__builtin__.open', mock_open())
+  @patch.object(builtins, 'open', mock_open())
   def test_raises_slice_gap_too_large_when_it_is(self):
     # one point over the max
     new_time = self.ceres_slice.startTime + self.ceres_slice.timeStep * (MAX_SLICE_GAP + 1)
@@ -796,7 +814,7 @@ class CeresSliceWriteTest(TestCase):
     self.assertRaises(SliceGapTooLarge, self.ceres_slice.write, [datapoint])
 
   @patch('ceres.getsize', Mock(return_value=0))
-  @patch('__builtin__.open', mock_open())
+  @patch.object(builtins, 'open', mock_open())
   def test_doesnt_raise_slice_gap_too_large_when_it_isnt(self):
     new_time = self.ceres_slice.startTime + self.ceres_slice.timeStep * (MAX_SLICE_GAP - 1)
     datapoint = (new_time, 0)
@@ -806,7 +824,7 @@ class CeresSliceWriteTest(TestCase):
       self.fail("SliceGapTooLarge raised")
 
   @patch('ceres.getsize', Mock(return_value=DATAPOINT_SIZE * 100))
-  @patch('__builtin__.open', mock_open())
+  @patch.object(builtins, 'open', mock_open())
   def test_doesnt_raise_slice_gap_when_newer_points_exist(self):
     new_time = self.ceres_slice.startTime + self.ceres_slice.timeStep * (MAX_SLICE_GAP + 1)
     datapoint = (new_time, 0)
@@ -816,33 +834,33 @@ class CeresSliceWriteTest(TestCase):
       self.fail("SliceGapTooLarge raised")
 
   @patch('ceres.getsize', Mock(return_value=0))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_raises_ioerror_if_seek_hits_ioerror(self, open_mock):
     open_mock.return_value.seek.side_effect = IOError
     self.assertRaises(IOError, self.ceres_slice.write, [(300, 0)])
 
   @patch('ceres.getsize', Mock(return_value=0))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_opens_file_as_binary(self, open_mock):
     self.ceres_slice.write([(300, 0)])
     # call_args = (args, kwargs)
     self.assertTrue(open_mock.call_args[0][1].endswith('b'))
 
   @patch('ceres.getsize', Mock(return_value=0))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_seeks_to_the_correct_offset_first_point(self, open_mock):
     self.ceres_slice.write([(300, 0)])
     open_mock.return_value.seek.assert_called_once_with(0)
 
   @patch('ceres.getsize', Mock(return_value=1 * DATAPOINT_SIZE))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_seeks_to_the_correct_offset_next_point(self, open_mock):
     self.ceres_slice.write([(360, 0)])
     # 2nd point in the file
     open_mock.return_value.seek.assert_called_once_with(DATAPOINT_SIZE)
 
   @patch('ceres.getsize', Mock(return_value=1 * DATAPOINT_SIZE))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_seeks_to_the_next_empty_offset_one_point_gap(self, open_mock):
     # Gaps are written out as NaNs so the offset we expect is the beginning
     # of the gap, not the offset of the point itself
@@ -850,19 +868,19 @@ class CeresSliceWriteTest(TestCase):
     open_mock.return_value.seek.assert_called_once_with(1 * DATAPOINT_SIZE)
 
   @patch('ceres.getsize', Mock(return_value=0))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_correct_size_written_first_point(self, open_mock):
     self.ceres_slice.write([(300, 0)])
     self.assertEqual(1 * DATAPOINT_SIZE, len(fetch_mock_open_writes(open_mock)))
 
   @patch('ceres.getsize', Mock(return_value=1 * DATAPOINT_SIZE))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_correct_size_written_next_point(self, open_mock):
     self.ceres_slice.write([(360, 0)])
     self.assertEqual(1 * DATAPOINT_SIZE, len(fetch_mock_open_writes(open_mock)))
 
   @patch('ceres.getsize', Mock(return_value=1 * DATAPOINT_SIZE))
-  @patch('__builtin__.open', new_callable=mock_open)
+  @patch.object(builtins, 'open', new_callable=mock_open)
   def test_correct_size_written_one_point_gap(self, open_mock):
     self.ceres_slice.write([(420, 0)])
     # one empty point, one real point = two points total written

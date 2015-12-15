@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 
 import sys
 import time
@@ -31,7 +32,7 @@ else:
   tree = getTree(fsPath)
 
   if not tree:
-    print "error: %s is not in a ceres tree" % fsPath
+    print("error: %s is not in a ceres tree" % fsPath)
     sys.exit(1)
 
   nodePath = tree.getNodePath(fsPath)
@@ -40,6 +41,6 @@ results = tree.fetch(nodePath, options.fromtime, options.untiltime)
 
 for (timestamp, value) in results:
   if options.batch:
-    print "%d\t%s" % (timestamp, value)
+    print("%d\t%s" % (timestamp, value))
   else:
-    print "%s\t%s" % (time.ctime(timestamp), value)
+    print("%s\t%s" % (time.ctime(timestamp), value))
