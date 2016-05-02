@@ -27,6 +27,13 @@ from bisect import bisect_left
 
 izip = getattr(itertools, 'izip', zip)
 
+try:
+  import fcntl
+  CAN_LOCK = True
+except ImportError:
+  CAN_LOCK = False
+
+LOCK_WRITES = False
 TIMESTAMP_FORMAT = "!L"
 TIMESTAMP_SIZE = struct.calcsize(TIMESTAMP_FORMAT)
 DATAPOINT_FORMAT = "!d"
@@ -711,6 +718,8 @@ class CeresSlice(object):
         byteOffset -= byteGap
 
     with open(self.fsPath, 'r+b') as fileHandle:
+      if LOCK_WRITES:
+        fcntl.flock(fileHandle.fileno(), fcntl.LOCK_EX)
       try:
         fileHandle.seek(byteOffset)
       except IOError:
@@ -735,6 +744,8 @@ class CeresSlice(object):
 
     self.node.clearSliceCache()
     with open(self.fsPath, 'r+b') as fileHandle:
+      if LOCK_WRITES:
+        fcntl.flock(fileHandle.fileno(), fcntl.LOCK_EX)
       fileHandle.seek(byteOffset)
       fileData = fileHandle.read()
       if fileData:
