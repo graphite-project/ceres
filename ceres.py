@@ -84,9 +84,8 @@ class CeresTree(object):
 
     for prop, value in props.items():
       propFile = join(ceresDir, prop)
-      fh = open(propFile, 'w')
-      fh.write(str(value))
-      fh.close()
+      with open(propFile, 'w') as fh:
+        fh.write(str(value))
 
     return cls(root)
 
@@ -316,12 +315,13 @@ used
 
     :raises: :class:`CorruptNode`
     """
-    try:
-      metadata = json.load(open(self.metadataFile, 'r'))
-      self.timeStep = int(metadata['timeStep'])
-      return metadata
-    except (KeyError, IOError, ValueError) as e:
-      raise CorruptNode(self, "Unable to parse node metadata: %s" % e.args)
+    with open(self.metadataFile, 'r') as fh:
+      try:
+        metadata = json.load(fh)
+        self.timeStep = int(metadata['timeStep'])
+        return metadata
+      except (KeyError, IOError, ValueError) as e:
+        raise CorruptNode(self, "Unable to parse node metadata: %s" % e.args)
 
   def writeMetadata(self, metadata):
     """Writes new metadata to disk
@@ -329,10 +329,8 @@ used
     :param metadata: a JSON-serializable dict of node metadata
     """
     self.timeStep = int(metadata['timeStep'])
-
-    f = open(self.metadataFile, 'w')
-    json.dump(metadata, f)
-    f.close()
+    with open(self.metadataFile, 'w') as fh:
+      json.dump(metadata, fh)
 
   @property
   def slices(self):
@@ -669,25 +667,25 @@ class CeresSlice(object):
     if byteOffset >= getsize(self.fsPath):
       raise NoData()
 
-    fileHandle = open(self.fsPath, 'rb')
-    fileHandle.seek(byteOffset)
+    with open(self.fsPath, 'rb') as fileHandle:
+      fileHandle.seek(byteOffset)
 
-    timeRange = int(untilTime - fromTime)
-    pointRange = timeRange // self.timeStep
-    byteRange = pointRange * DATAPOINT_SIZE
-    packedValues = fileHandle.read(byteRange)
+      timeRange = int(untilTime - fromTime)
+      pointRange = timeRange // self.timeStep
+      byteRange = pointRange * DATAPOINT_SIZE
+      packedValues = fileHandle.read(byteRange)
 
-    pointsReturned = len(packedValues) // DATAPOINT_SIZE
-    format = '!' + ('d' * pointsReturned)
-    values = struct.unpack(format, packedValues)
-    values = [v if not isnan(v) else None for v in values]
+      pointsReturned = len(packedValues) // DATAPOINT_SIZE
+      format = '!' + ('d' * pointsReturned)
+      values = struct.unpack(format, packedValues)
+      values = [v if not isnan(v) else None for v in values]
 
-    endTime = fromTime + (len(values) * self.timeStep)
-    # print '[DEBUG slice.read] startTime=%s fromTime=%s untilTime=%s' % (
-    #    self.startTime, fromTime, untilTime)
-    # print '[DEBUG slice.read] timeInfo = (%s, %s, %s)' % (fromTime, endTime, self.timeStep)
-    # print '[DEBUG slice.read] values = %s' % str(values)
-    return TimeSeriesData(fromTime, endTime, self.timeStep, values)
+      endTime = fromTime + (len(values) * self.timeStep)
+      # print '[DEBUG slice.read] startTime=%s fromTime=%s untilTime=%s' % (
+      #    self.startTime, fromTime, untilTime)
+      # print '[DEBUG slice.read] timeInfo = (%s, %s, %s)' % (fromTime, endTime, self.timeStep)
+      # print '[DEBUG slice.read] values = %s' % str(values)
+      return TimeSeriesData(fromTime, endTime, self.timeStep, values)
 
   def write(self, sequence):
     beginningTime = sequence[0][0]
