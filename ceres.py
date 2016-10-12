@@ -42,6 +42,7 @@ NAN = float('nan')
 PACKED_NAN = struct.pack(DATAPOINT_FORMAT, NAN)
 MAX_SLICE_GAP = 80
 DEFAULT_TIMESTEP = 60
+DEFAULT_NODE_CACHING_BEHAVIOR = 'all'
 DEFAULT_SLICE_CACHING_BEHAVIOR = 'none'
 SLICE_PERMS = 0o644
 DIR_PERMS = 0o755
@@ -55,7 +56,7 @@ class CeresTree(object):
 
   .. note:: Use :func:`createTree` to initialize and instantiate a new CeresTree
 
-  .. seealso:: :func:`setDefaultSliceCachingBehavior` to adjust caching behavior
+  .. seealso:: :func:`setDefaultNodeCachingBehavior` to adjust caching behavior
   """
   def __init__(self, root):
     if isdir(root):
@@ -63,6 +64,7 @@ class CeresTree(object):
     else:
       raise ValueError("Invalid root directory '%s'" % root)
     self.nodeCache = {}
+    self.nodeCachingBehavior = DEFAULT_NODE_CACHING_BEHAVIOR
 
   def __repr__(self):
     return "<CeresTree[0x%x]: %s>" % (id(self), self.root)
@@ -134,21 +136,52 @@ class CeresTree(object):
     :returns: `True` or `False`"""
     return isdir(self.getFilesystemPath(nodePath))
 
+  def setNodeCachingBehavior(self, behavior):
+    """Set node caching behavior.
+
+    :param behavior: See :func:`getNode` for valid behavior values
+    """
+    behavior = behavior.lower()
+    if behavior not in ('none', 'all'):
+      raise ValueError("invalid caching behavior '%s'" % behavior)
+
+    self.nodeCachingBehavior = behavior
+    self.nodeCache = {}
+
   def getNode(self, nodePath):
-    """Returns a Ceres node given a metric name
+    """Returns a Ceres node given a metric name. Because nodes are looked up in
+    every read and write, a caching mechanism is provided. Cache behavior is set
+    using :func:`setNodeCachingBehavior` and defaults to the value set in
+    ``DEFAULT_NODE_CACHING_BEHAVIOR``
+
+    The following behaviors are available:
+
+    * `none` - Node is read from the filesystem at every access.
+    * `all` (default) - All nodes are cached.
 
       :param nodePath: A metric name
 
       :returns: :class:`CeresNode` or `None`
     """
-    if nodePath not in self.nodeCache:
+    if self.nodeCachingBehavior == 'all':
+      if nodePath not in self.nodeCache:
+        fsPath = self.getFilesystemPath(nodePath)
+        if CeresNode.isNodeDir(fsPath):
+          self.nodeCache[nodePath] = CeresNode(self, nodePath, fsPath)
+        else:
+          return None
+
+      return self.nodeCache[nodePath]
+
+    elif self.nodeCachingBehavior == 'none':
       fsPath = self.getFilesystemPath(nodePath)
       if CeresNode.isNodeDir(fsPath):
-        self.nodeCache[nodePath] = CeresNode(self, nodePath, fsPath)
+        return CeresNode(self, nodePath, fsPath)
       else:
         return None
 
-    return self.nodeCache[nodePath]
+    else:
+      raise ValueError("invalid caching behavior configured '%s'" % self.nodeCachingBehavior)
 
   def find(self, nodePattern, fromTime=None, untilTime=None):
     """Find nodes which match a wildcard pattern, optionally filtering on
@@ -223,6 +256,8 @@ other, less-precise `timeStep` values in its underlying :class:`CeresSlice` data
 
   .. note:: This class generally should be instantiated through use of :class:`CeresTree`. See
             :func:`CeresTree.createNode` and :func:`CeresTree.getNode`
+
+  .. seealso:: :func:`setDefaultSliceCachingBehavior` to adjust caching behavior
   """
   __slots__ = ('tree', 'nodePath', 'fsPath',
                'metadataFile', 'timeStep',
@@ -837,6 +872,16 @@ def getTree(path):
       return CeresTree(path)
 
     path = dirname(path)
+
+
+def setDefaultNodeCachingBehavior(behavior):
+  global DEFAULT_NODE_CACHING_BEHAVIOR
+
+  behavior = behavior.lower()
+  if behavior not in ('none', 'all'):
+    raise ValueError("invalid caching behavior '%s'" % behavior)
+
+  DEFAULT_NODE_CACHING_BEHAVIOR = behavior
 
 
 def setDefaultSliceCachingBehavior(behavior):

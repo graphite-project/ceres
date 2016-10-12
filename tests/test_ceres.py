@@ -12,8 +12,8 @@ except ImportError:
 
 
 from ceres import CeresNode, CeresSlice, CeresTree
-from ceres import DATAPOINT_SIZE, DEFAULT_SLICE_CACHING_BEHAVIOR, DEFAULT_TIMESTEP, DIR_PERMS,\
-    MAX_SLICE_GAP
+from ceres import DATAPOINT_SIZE, DEFAULT_NODE_CACHING_BEHAVIOR, DEFAULT_SLICE_CACHING_BEHAVIOR,\
+    DEFAULT_TIMESTEP, DIR_PERMS, MAX_SLICE_GAP
 from ceres import getTree, CorruptNode, NoData, NodeDeleted, NodeNotFound, SliceDeleted,\
     SliceGapTooLarge, TimeSeriesData
 
@@ -116,6 +116,11 @@ class CeresTreeTest(TestCase):
     tree = CeresTree('/graphite/storage/ceres')
     abspath_mock.assert_called_once_with('/graphite/storage/ceres')
     self.assertEqual('/var/graphite/storage/ceres', tree.root)
+
+  @patch('ceres.isdir', new=Mock(return_value=True))
+  def test_init_sets_default_cache_behavior(self):
+    tree = CeresTree('/graphite/storage/ceres')
+    self.assertEqual(DEFAULT_NODE_CACHING_BEHAVIOR, tree.nodeCachingBehavior)
 
   @patch('ceres.isdir', new=Mock(return_value=False))
   @patch.object(CeresTree, '__init__')
@@ -251,6 +256,15 @@ class CeresTreeTest(TestCase):
     ceres_node_mock.assert_called_once_with(self.ceres_tree, 'metrics.foo', ANY)
     read_mock.assert_called_once_with(0, 1000)
     self.assertEqual(Mock(spec=TimeSeriesData), result)
+
+  def test_set_node_caching_behavior_validates_names(self):
+    self.ceres_tree.setNodeCachingBehavior('none')
+    self.assertEquals('none', self.ceres_tree.nodeCachingBehavior)
+    self.ceres_tree.setNodeCachingBehavior('all')
+    self.assertEquals('all', self.ceres_tree.nodeCachingBehavior)
+    self.assertRaises(ValueError, self.ceres_tree.setNodeCachingBehavior, 'foo')
+    # Assert unchanged
+    self.assertEquals('all', self.ceres_tree.nodeCachingBehavior)
 
 
 class CeresNodeTest(TestCase):
