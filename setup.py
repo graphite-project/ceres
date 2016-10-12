@@ -14,5 +14,6 @@ setup(
   license='Apache Software License 2.0',
   description='Distributable time-series database',
   py_modules=['ceres'],
-  scripts=glob('bin/*')
+  scripts=glob('bin/*'),
+  data_files=[('plugins/maintenance', glob('plugins/maintenance/*.py'))]
 )
