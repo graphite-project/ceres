@@ -1,4 +1,4 @@
-from unittest import TestCase, skip
+from unittest import TestCase
 
 import errno
 
@@ -495,11 +495,10 @@ class CeresNodeTest(TestCase):
     compacted = self.ceres_node.compact(datapoints)
     self.assertEqual([[(600, 0.0)]], compacted)
 
-  @skip("XXX: Ceres should keep the last of duplicate points")
   def test_compact_keeps_last_seen_duplicate_timestamp(self):
-    datapoints = [(600, 0), (600, 1)]
+    datapoints = [(600, 0), (600, 1), (660, 1), (660, 0)]
     compacted = self.ceres_node.compact(datapoints)
-    self.assertEqual([[(600, 1.0)]], compacted)
+    self.assertEqual([[(600, 1.0), (660, 0.0)]], compacted)
 
   def test_compact_groups_contiguous_points(self):
     datapoints = [(600, 0), (660, 0), (840, 0)]

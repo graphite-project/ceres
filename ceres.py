@@ -627,8 +627,9 @@ timestamps and null values removed
       :returns: A list of lists of contiguous sorted datapoint tuples
                 ``[[(timestamp, value), ...], ...]``
     """
-    datapoints = sorted((int(timestamp), float(value))
-                        for timestamp, value in datapoints if value is not None)
+    datapoints = sorted(((int(timestamp), float(value))
+                         for timestamp, value in datapoints if value is not None),
+                        key=lambda datapoint: datapoint[0])
     sequences = []
     sequence = []
     minimumTimestamp = 0  # used to avoid duplicate intervals
@@ -640,7 +641,8 @@ timestamps and null values removed
         sequence.append((timestamp, value))
 
       else:
-        if not timestamp > minimumTimestamp:  # drop duplicate intervals
+        if timestamp == minimumTimestamp:  # overwrite duplicate intervals with latest value
+          sequence[-1] = (timestamp, value)
           continue
 
         if timestamp == sequence[-1][0] + self.timeStep:  # append contiguous datapoints
