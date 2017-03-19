@@ -9,7 +9,7 @@ python:
     - 3.6
     - "pypy"
 before_install:
-    - pip install --upgrade pip
+    - pip install --upgrade pip<9.0.0
 install:
     - pip install -r test_requirements.txt
     - python setup.py install
