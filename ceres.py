@@ -500,6 +500,10 @@ or `none` (See :func:`slices`)
         except NoData:
           break
 
+        # Normalize data across slice boundaries with a different timeStep
+        if series.timeStep != self.timeStep:
+          series.values = aggregateSeries(series.timeStep, self.timeStep, series.values)
+
         earliestData = series.startTime
 
         rightMissing = (requestUntilTime - series.endTime) // self.timeStep
@@ -513,6 +517,10 @@ or `none` (See :func:`slices`)
           series = slice.read(slice.startTime, requestUntilTime)
         except NoData:
           continue
+
+        # Normalize data across slice boundaries with a different timeStep
+        if series.timeStep != self.timeStep:
+          series.values = aggregateSeries(series.timeStep, self.timeStep, series.values)
 
         earliestData = series.startTime
 
@@ -864,6 +872,41 @@ class SliceGapTooLarge(Exception):
 
 class SliceDeleted(Exception):
   pass
+
+
+def aggregate(values):
+  # Filter out None values
+  knownValues = list(filter(lambda x: x is not None, values))
+  if len(knownValues) is 0:
+    return None
+  return float(sum(knownValues)) / float(len(knownValues))
+
+
+def aggregateSeries(oldTimeStep, newTimeStep, values):
+  # If series is at a lower precision, repeat values to fill missing gaps
+  if oldTimeStep > newTimeStep:
+    ratio = oldTimeStep // newTimeStep
+    newValues = []
+    for value in values:
+      newValues.extend([value] * ratio)
+    return newValues
+  # If the series is at a higher precision, aggregate to fit to a lower precision
+  elif oldTimeStep < newTimeStep:
+    factor = int(newTimeStep // oldTimeStep)
+    newValues = []
+    subArr = []
+    for val in values:
+      subArr.append(val)
+      if len(subArr) == factor:
+        newValues.append(aggregate(subArr))
+        subArr = []
+
+    if len(subArr):
+      newValues.append(aggregate(subArr))
+
+    return newValues
+
+  return values
 
 
 def getTree(path):
