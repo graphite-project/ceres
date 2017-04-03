@@ -15,7 +15,7 @@ from ceres import CeresNode, CeresSlice, CeresTree
 from ceres import DATAPOINT_SIZE, DEFAULT_NODE_CACHING_BEHAVIOR, DEFAULT_SLICE_CACHING_BEHAVIOR,\
     DEFAULT_TIMESTEP, DIR_PERMS, MAX_SLICE_GAP
 from ceres import getTree, CorruptNode, NoData, NodeDeleted, NodeNotFound, SliceDeleted,\
-    SliceGapTooLarge, TimeSeriesData
+    SliceGapTooLarge, TimeSeriesData, InvalidAggregationMethod
 
 
 def fetch_mock_open_writes(open_mock):
@@ -38,7 +38,7 @@ def make_slice_mock(start, end, step):
     result_start = max(startTime, start)
     result_end = min(endTime, end)
     points = (result_end - result_start) // step
-    return TimeSeriesData(result_start, result_end, step, [0] * points)
+    return TimeSeriesData(result_start, result_end, step, [float(x) for x in range(points)])
 
   slice_mock.read.side_effect = side_effect
   return slice_mock
@@ -675,7 +675,7 @@ class CeresNodeReadTest(TestCase):
 
   def test_read_pads_points_missing_before_series(self):
     result = self.ceres_node.read(540, 1200)
-    self.assertEqual([None] + [0] * 10, result.values)
+    self.assertEqual([None, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9], result.values)
 
   def test_read_pads_points_missing_after_series(self):
     result = self.ceres_node.read(1200, 1860)
@@ -688,7 +688,7 @@ class CeresNodeReadTest(TestCase):
 
   def test_read_across_slices_merges_results(self):
     result = self.ceres_node.read(900, 1500)
-    self.assertEqual([0] * 10, result.values)
+    self.assertEqual([0, 1, 2, 3, 4, 0, 1, 2, 3, 4], result.values)
 
   def test_read_pads_points_missing_after_series_across_slices(self):
     result = self.ceres_node.read(900, 1860)
@@ -697,7 +697,7 @@ class CeresNodeReadTest(TestCase):
   def test_read_pads_points_missing_between_slices(self):
     self.ceres_slices[1] = make_slice_mock(600, 1140, 60)
     result = self.ceres_node.read(900, 1500)
-    self.assertEqual([0] * 4 + [None] + [0] * 5, result.values)
+    self.assertEqual([0, 1, 2, 3, None, 0, 1, 2, 3, 4], result.values)
 
 
 class CeresSliceTest(TestCase):
@@ -898,3 +898,107 @@ class CeresSliceWriteTest(TestCase):
     self.ceres_slice.write([(420, 0)])
     # one empty point, one real point = two points total written
     self.assertEqual(2 * DATAPOINT_SIZE, len(fetch_mock_open_writes(open_mock)))
+
+
+class CeresArchiveNodeReadTest(TestCase):
+  def setUp(self):
+    with patch('ceres.isdir', new=Mock(return_value=True)):
+      with patch('ceres.exists', new=Mock(return_value=True)):
+        self.ceres_tree = CeresTree('/graphite/storage/ceres')
+        self.ceres_node = CeresNode(
+            self.ceres_tree,
+            'sample_metric',
+            '/graphite/storage/ceres/sample_metric')
+        self.ceres_node.timeStep = 30
+
+    slice_configs = [
+      (1200, 1800, 30),
+      (600, 1200, 60)]
+
+    self.ceres_slices = []
+    for start, end, step in slice_configs:
+      slice_mock = make_slice_mock(start, end, step)
+      self.ceres_slices.append(slice_mock)
+
+    self.ceres_slices_patch = patch('ceres.CeresNode.slices', new=iter(self.ceres_slices))
+    self.ceres_slices_patch.start()
+
+  def tearDown(self):
+    self.ceres_slices_patch.stop()
+
+  def test_archives_read_loads_metadata_if_timestep_unknown(self):
+    with patch('ceres.CeresNode.readMetadata', new=Mock(side_effect=Exception))\
+      as read_metadata_mock:
+      self.ceres_node.timeStep = None
+      try:  # Raise Exception as a cheap exit out of the function once we have the call we want
+        self.ceres_node.read(600, 660)
+      except Exception:
+        pass
+      read_metadata_mock.assert_called_once_with()
+
+  def test_archives_read_normalizes_from_time(self):
+    self.ceres_node.read(1210, 1260)
+    self.ceres_slices[0].read.assert_called_once_with(1200, 1260)
+
+  def test_archives_read_normalizes_until_time(self):
+    self.ceres_node.read(1200, 1270)
+    self.ceres_slices[0].read.assert_called_once_with(1200, 1260)
+
+  def test_archives_read_returns_empty_time_series_if_before_slices(self):
+    result = self.ceres_node.read(0, 300)
+    self.assertEqual([None] * 10, result.values)
+
+  def test_archives_read_returns_empty_time_series_if_slice_has_no_data(self):
+    self.ceres_slices[0].read.side_effect = NoData
+    result = self.ceres_node.read(1200, 1500)
+    self.assertEqual([None] * 10, result.values)
+
+  def test_archives_read_pads_points_missing_before_series(self):
+    result = self.ceres_node.read(300, 1200)
+    self.assertEqual(None, result.values[0])
+
+  def test_archives_read_pads_points_missing_after_series(self):
+    result = self.ceres_node.read(1200, 1860)
+    self.assertEqual(None, result.values[-1])
+
+  def test_archives_read_goes_across_slices(self):
+    self.ceres_node.read(900, 1500)
+    self.ceres_slices[0].read.assert_called_once_with(1200, 1500)
+    self.ceres_slices[1].read.assert_called_once_with(900, 1200)
+
+  def test_archives_read_across_slices_merges_results_average(self):
+    result = self.ceres_node.read(900, 1470)
+    self.assertEqual([0, 1, 2, 3, 4, 0.5, 2.5, 4.5, 6.5, 8], result.values)
+
+  def test_archives_read_across_slices_merges_results_sum(self):
+    self.ceres_node.aggregationMethod = 'sum'
+    result = self.ceres_node.read(900, 1470)
+    self.assertEqual([0, 1, 2, 3, 4, 1, 5, 9, 13, 8], result.values)
+
+  def test_archives_read_across_slices_merges_results_last(self):
+    self.ceres_node.aggregationMethod = 'last'
+    result = self.ceres_node.read(900, 1470)
+    self.assertEqual([0, 1, 2, 3, 4, 1, 3, 5, 7, 8], result.values)
+
+  def test_archives_read_across_slices_merges_results_max(self):
+    self.ceres_node.aggregationMethod = 'max'
+    result = self.ceres_node.read(900, 1470)
+    self.assertEqual([0, 1, 2, 3, 4, 1, 3, 5, 7, 8], result.values)
+
+  def test_archives_read_across_slices_merges_results_min(self):
+    self.ceres_node.aggregationMethod = 'min'
+    result = self.ceres_node.read(900, 1470)
+    self.assertEqual([0, 1, 2, 3, 4, 0, 2, 4, 6, 8], result.values)
+
+  def test_archives_invalid_aggregation_method(self):
+    self.ceres_node.aggregationMethod = 'invalid'
+    self.assertRaises(InvalidAggregationMethod, self.ceres_node.read, 900, 1500)
+
+  def test_archives_read_pads_points_missing_after_series_across_slices(self):
+    result = self.ceres_node.read(900, 1860)
+    self.assertEqual(None, result.values[-1])
+
+  def test_archives_read_pads_points_missing_between_slices(self):
+    self.ceres_slices[1] = make_slice_mock(600, 900, 300)
+    result = self.ceres_node.read(600, 1500)
+    self.assertEqual([0, None, 4.5], result.values)
