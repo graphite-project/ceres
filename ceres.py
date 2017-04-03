@@ -485,6 +485,7 @@ or `none` (See :func:`slices`)
     sliceBoundary = None  # to know when to split up queries across slices
     resultValues = []
     earliestData = None
+    timeStep = self.timeStep
 
     for slice in self.slices:
       # If there was a prior slice covering the requested interval, dont ask for that data again
@@ -500,13 +501,21 @@ or `none` (See :func:`slices`)
         except NoData:
           break
 
-        # Normalize data across slice boundaries with a different timeStep
-        if series.timeStep != self.timeStep:
-          series.values = aggregateSeries(series.timeStep, self.timeStep, series.values)
+        if series.timeStep != timeStep:
+          if len(resultValues) == 0:
+            # First slice holding series data, this becomes the default timeStep.
+            timeStep = series.timeStep
+          elif series.timeStep < timeStep:
+            # Series is at a different precision, aggregate to fit our current set.
+            series.values = aggregateSeries(series.timeStep, timeStep, series.values)
+          else:
+            # Normalize current set to fit new series data.
+            resultValues = aggregateSeries(timeStep, series.timeStep, resultValues)
+            timeStep = series.timeStep
 
         earliestData = series.startTime
 
-        rightMissing = (requestUntilTime - series.endTime) // self.timeStep
+        rightMissing = (requestUntilTime - series.endTime) // timeStep
         rightNulls = [None for i in range(rightMissing)]
         resultValues = series.values + rightNulls + resultValues
         break
@@ -518,13 +527,21 @@ or `none` (See :func:`slices`)
         except NoData:
           continue
 
-        # Normalize data across slice boundaries with a different timeStep
-        if series.timeStep != self.timeStep:
-          series.values = aggregateSeries(series.timeStep, self.timeStep, series.values)
+        if series.timeStep != timeStep:
+          if len(resultValues) == 0:
+            # First slice holding series data, this becomes the default timeStep.
+            timeStep = series.timeStep
+          elif series.timeStep < timeStep:
+            # Series is at a different precision, aggregate to fit our current set.
+            series.values = aggregateSeries(series.timeStep, timeStep, series.values)
+          else:
+            # Normalize current set to fit new series data.
+            resultValues = aggregateSeries(timeStep, series.timeStep, resultValues)
+            timeStep = series.timeStep
 
         earliestData = series.startTime
 
-        rightMissing = (requestUntilTime - series.endTime) // self.timeStep
+        rightMissing = (requestUntilTime - series.endTime) // timeStep
         rightNulls = [None for i in range(rightMissing)]
         resultValues = series.values + rightNulls + resultValues
 
@@ -533,16 +550,16 @@ or `none` (See :func:`slices`)
 
     # The end of the requested interval predates all slices
     if earliestData is None:
-      missing = int(untilTime - fromTime) // self.timeStep
+      missing = int(untilTime - fromTime) // timeStep
       resultValues = [None for i in range(missing)]
 
     # Left pad nulls if the start of the requested interval predates all slices
     else:
-      leftMissing = (earliestData - fromTime) // self.timeStep
+      leftMissing = (earliestData - fromTime) // timeStep
       leftNulls = [None for i in range(leftMissing)]
       resultValues = leftNulls + resultValues
 
-    return TimeSeriesData(fromTime, untilTime, self.timeStep, resultValues)
+    return TimeSeriesData(fromTime, untilTime, timeStep, resultValues)
 
   def write(self, datapoints):
     """Writes datapoints to underlying slices. Datapoints that round to the same timestamp for the
@@ -883,30 +900,22 @@ def aggregate(values):
 
 
 def aggregateSeries(oldTimeStep, newTimeStep, values):
-  # If series is at a lower precision, repeat values to fill missing gaps
-  if oldTimeStep > newTimeStep:
-    ratio = oldTimeStep // newTimeStep
-    newValues = []
-    for value in values:
-      newValues.extend([value] * ratio)
-    return newValues
-  # If the series is at a higher precision, aggregate to fit to a lower precision
-  elif oldTimeStep < newTimeStep:
-    factor = int(newTimeStep // oldTimeStep)
-    newValues = []
-    subArr = []
-    for val in values:
-      subArr.append(val)
-      if len(subArr) == factor:
-        newValues.append(aggregate(subArr))
-        subArr = []
-
-    if len(subArr):
+  # Aggregate current values to fit newTimeStep.
+  # Makes the assumption that the caller has already guaranteed
+  # that newTimeStep is bigger than oldTimeStep.
+  factor = int(newTimeStep // oldTimeStep)
+  newValues = []
+  subArr = []
+  for val in values:
+    subArr.append(val)
+    if len(subArr) == factor:
       newValues.append(aggregate(subArr))
+      subArr = []
 
-    return newValues
+  if len(subArr):
+    newValues.append(aggregate(subArr))
 
-  return values
+  return newValues
 
 
 def getTree(path):
