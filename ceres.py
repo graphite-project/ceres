@@ -44,6 +44,7 @@ MAX_SLICE_GAP = 80
 DEFAULT_TIMESTEP = 60
 DEFAULT_NODE_CACHING_BEHAVIOR = 'all'
 DEFAULT_SLICE_CACHING_BEHAVIOR = 'none'
+SLICE_AGGREGATION_METHODS = ['average', 'sum', 'last', 'max', 'min']
 SLICE_PERMS = 0o644
 DIR_PERMS = 0o755
 
@@ -259,7 +260,7 @@ other, less-precise `timeStep` values in its underlying :class:`CeresSlice` data
   .. seealso:: :func:`setDefaultSliceCachingBehavior` to adjust caching behavior
   """
   __slots__ = ('tree', 'nodePath', 'fsPath',
-               'metadataFile', 'timeStep',
+               'metadataFile', 'timeStep', 'aggregationMethod',
                'sliceCache', 'sliceCachingBehavior')
 
   def __init__(self, tree, nodePath, fsPath):
@@ -268,6 +269,7 @@ other, less-precise `timeStep` values in its underlying :class:`CeresSlice` data
     self.fsPath = fsPath
     self.metadataFile = join(fsPath, '.ceres-node')
     self.timeStep = None
+    self.aggregationMethod = 'average'
     self.sliceCache = None
     self.sliceCachingBehavior = DEFAULT_SLICE_CACHING_BEHAVIOR
 
@@ -354,6 +356,8 @@ used
       try:
         metadata = json.load(fh)
         self.timeStep = int(metadata['timeStep'])
+        if metadata.get('aggregationMethod'):
+          self.aggregationMethod = metadata['aggregationMethod']
         return metadata
       except (KeyError, IOError, ValueError) as e:
         raise CorruptNode(self, "Unable to parse node metadata: %s" % e.args)
@@ -486,6 +490,7 @@ or `none` (See :func:`slices`)
     resultValues = []
     earliestData = None
     timeStep = self.timeStep
+    method = self.aggregationMethod
 
     for slice in self.slices:
       # If there was a prior slice covering the requested interval, dont ask for that data again
@@ -507,10 +512,10 @@ or `none` (See :func:`slices`)
             timeStep = series.timeStep
           elif series.timeStep < timeStep:
             # Series is at a different precision, aggregate to fit our current set.
-            series.values = aggregateSeries(series.timeStep, timeStep, series.values)
+            series.values = aggregateSeries(method, series.timeStep, timeStep, series.values)
           else:
             # Normalize current set to fit new series data.
-            resultValues = aggregateSeries(timeStep, series.timeStep, resultValues)
+            resultValues = aggregateSeries(method, timeStep, series.timeStep, resultValues)
             timeStep = series.timeStep
 
         earliestData = series.startTime
@@ -533,10 +538,10 @@ or `none` (See :func:`slices`)
             timeStep = series.timeStep
           elif series.timeStep < timeStep:
             # Series is at a different precision, aggregate to fit our current set.
-            series.values = aggregateSeries(series.timeStep, timeStep, series.values)
+            series.values = aggregateSeries(method, series.timeStep, timeStep, series.values)
           else:
             # Normalize current set to fit new series data.
-            resultValues = aggregateSeries(timeStep, series.timeStep, resultValues)
+            resultValues = aggregateSeries(method, timeStep, series.timeStep, resultValues)
             timeStep = series.timeStep
 
         earliestData = series.startTime
@@ -883,6 +888,10 @@ class InvalidRequest(Exception):
   pass
 
 
+class InvalidAggregationMethod(Exception):
+  pass
+
+
 class SliceGapTooLarge(Exception):
   "For internal use only"
 
@@ -891,15 +900,28 @@ class SliceDeleted(Exception):
   pass
 
 
-def aggregate(values):
+def aggregate(aggregationMethod, values):
   # Filter out None values
   knownValues = list(filter(lambda x: x is not None, values))
   if len(knownValues) is 0:
     return None
-  return float(sum(knownValues)) / float(len(knownValues))
+  # Aggregate based on method
+  if aggregationMethod == 'average':
+    return float(sum(knownValues)) / float(len(knownValues))
+  elif aggregationMethod == 'sum':
+    return float(sum(knownValues))
+  elif aggregationMethod == 'last':
+    return knownValues[-1]
+  elif aggregationMethod == 'max':
+    return max(knownValues)
+  elif aggregationMethod == 'min':
+    return min(knownValues)
+  else:
+    raise InvalidAggregationMethod("Unrecognized aggregation method %s" %
+                                   aggregationMethod)
 
 
-def aggregateSeries(oldTimeStep, newTimeStep, values):
+def aggregateSeries(method, oldTimeStep, newTimeStep, values):
   # Aggregate current values to fit newTimeStep.
   # Makes the assumption that the caller has already guaranteed
   # that newTimeStep is bigger than oldTimeStep.
@@ -909,11 +931,11 @@ def aggregateSeries(oldTimeStep, newTimeStep, values):
   for val in values:
     subArr.append(val)
     if len(subArr) == factor:
-      newValues.append(aggregate(subArr))
+      newValues.append(aggregate(method, subArr))
       subArr = []
 
   if len(subArr):
-    newValues.append(aggregate(subArr))
+    newValues.append(aggregate(method, subArr))
 
   return newValues
 
