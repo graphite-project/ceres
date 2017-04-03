@@ -38,7 +38,7 @@ def make_slice_mock(start, end, step):
     result_start = max(startTime, start)
     result_end = min(endTime, end)
     points = (result_end - result_start) // step
-    return TimeSeriesData(result_start, result_end, step, [0] * points)
+    return TimeSeriesData(result_start, result_end, step, [float(x) for x in range(points)])
 
   slice_mock.read.side_effect = side_effect
   return slice_mock
@@ -675,7 +675,7 @@ class CeresNodeReadTest(TestCase):
 
   def test_read_pads_points_missing_before_series(self):
     result = self.ceres_node.read(540, 1200)
-    self.assertEqual([None] + [0] * 10, result.values)
+    self.assertEqual([None, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9], result.values)
 
   def test_read_pads_points_missing_after_series(self):
     result = self.ceres_node.read(1200, 1860)
@@ -688,7 +688,7 @@ class CeresNodeReadTest(TestCase):
 
   def test_read_across_slices_merges_results(self):
     result = self.ceres_node.read(900, 1500)
-    self.assertEqual([0] * 10, result.values)
+    self.assertEqual([0, 1, 2, 3, 4, 0, 1, 2, 3, 4], result.values)
 
   def test_read_pads_points_missing_after_series_across_slices(self):
     result = self.ceres_node.read(900, 1860)
@@ -697,7 +697,7 @@ class CeresNodeReadTest(TestCase):
   def test_read_pads_points_missing_between_slices(self):
     self.ceres_slices[1] = make_slice_mock(600, 1140, 60)
     result = self.ceres_node.read(900, 1500)
-    self.assertEqual([0] * 4 + [None] + [0] * 5, result.values)
+    self.assertEqual([0, 1, 2, 3, None, 0, 1, 2, 3, 4], result.values)
 
 
 class CeresSliceTest(TestCase):
@@ -968,7 +968,7 @@ class CeresArchiveNodeReadTest(TestCase):
 
   def test_archives_read_across_slices_merges_results(self):
     result = self.ceres_node.read(900, 1500)
-    self.assertEqual([0] * 10, result.values)
+    self.assertEqual([0, 1, 2, 3, 4, 0.5, 2.5, 4.5, 6.5, 8.5], result.values)
 
   def test_archives_read_pads_points_missing_after_series_across_slices(self):
     result = self.ceres_node.read(900, 1860)
@@ -977,4 +977,4 @@ class CeresArchiveNodeReadTest(TestCase):
   def test_archives_read_pads_points_missing_between_slices(self):
     self.ceres_slices[1] = make_slice_mock(600, 900, 300)
     result = self.ceres_node.read(600, 1500)
-    self.assertEqual([0, None, 0], result.values)
+    self.assertEqual([0, None, 4.5], result.values)
