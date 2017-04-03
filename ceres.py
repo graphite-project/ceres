@@ -20,7 +20,7 @@ import os
 import struct
 import json
 import errno
-from math import isnan
+from math import ceil, isnan
 from os.path import isdir, exists, join, dirname, abspath, getsize, getmtime
 from glob import glob
 from bisect import bisect_left
@@ -38,8 +38,10 @@ TIMESTAMP_FORMAT = "!L"
 TIMESTAMP_SIZE = struct.calcsize(TIMESTAMP_FORMAT)
 DATAPOINT_FORMAT = "!d"
 DATAPOINT_SIZE = struct.calcsize(DATAPOINT_FORMAT)
+INFINITY = float('inf')
 NAN = float('nan')
 PACKED_NAN = struct.pack(DATAPOINT_FORMAT, NAN)
+MAX_DATA_POINTS = INFINITY
 MAX_SLICE_GAP = 80
 DEFAULT_TIMESTEP = 60
 DEFAULT_NODE_CACHING_BEHAVIOR = 'all'
@@ -563,6 +565,14 @@ or `none` (See :func:`slices`)
       leftMissing = (earliestData - fromTime) // timeStep
       leftNulls = [None for i in range(leftMissing)]
       resultValues = leftNulls + resultValues
+
+    # Finally, normalize the entire dataset for any added left padded nulls.
+    # This is an optimization for reducing large sets of data.
+    if MAX_DATA_POINTS < len(resultValues):
+      factor = int(ceil(float(len(resultValues)) / float(MAX_DATA_POINTS)))
+      newTimeStep = factor * timeStep
+      resultValues = aggregateSeries(method, timeStep, newTimeStep, resultValues)
+      timeStep = newTimeStep
 
     return TimeSeriesData(fromTime, untilTime, timeStep, resultValues)
 
