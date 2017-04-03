@@ -2,6 +2,8 @@
 
 [![Build Status](https://secure.travis-ci.org/graphite-project/ceres.png)](http://travis-ci.org/graphite-project/ceres)
 
+Ceres is *not actively maintained*.
+
 Ceres is a component of [Graphite][] as one of the time-series storage options available for use.
 Ceres provides a file format for incoming metrics to be persisted when received from the network.
 See also [Whisper][]
