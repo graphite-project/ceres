@@ -90,9 +90,9 @@ def do_rollup(node, fineArchive, coarseArchive):
       windowEnd = windowStart + coarseStep
       fineDatapoints = []
       if (
-          windowStart <= tsMin <= windowEnd
-          or (tsMin <= windowStart and tsMax >= windowEnd)
-          or windowStart <= tsMax <= windowEnd
+          windowStart <= tsMin <= windowEnd or
+          (tsMin <= windowStart and tsMax >= windowEnd) or
+          windowStart <= tsMax <= windowEnd
       ):
         fineDatapoints = [d for d in overflowDatapoints if d[0] >= windowStart and d[0] < windowEnd]
 
