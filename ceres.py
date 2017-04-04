@@ -807,7 +807,8 @@ class CeresSlice(object):
     if not exists(self.fsPath):
       raise SliceDeleted()
 
-    t = t - (t % self.timeStep)
+    if t % self.timeStep != 0:
+      t = t - (t % self.timeStep) + self.timeStep
     timeOffset = t - self.startTime
     if timeOffset < 0:
       return
