@@ -125,9 +125,6 @@ def log(message):
   logfile.flush()
 
 
-schemas = None
-
-
 class MissingRequiredParam(Exception):
   def __init__(self, param):
     Exception.__init__(self)
