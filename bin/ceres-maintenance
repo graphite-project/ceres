@@ -138,6 +138,7 @@ if __name__ == '__main__':
   parser.add_option('--verbose', action='store_true', help="Increase truthiness")
   parser.add_option('--log', help="Write to the given log file instead of stdout")
   parser.add_option('--lock', help="lock file for maintenance proc")
+  parser.add_option('--workers', help="Number of workers to run (default: 4)", type=int, default=4)
   parser.add_option('--root', default='/opt/graphite/storage/ceres/',
                     help="Specify were to perform maintenance "
                          "(default: /opt/graphite/storage/ceres/)")
@@ -239,7 +240,7 @@ if __name__ == '__main__':
   # Begin walking the tree
   dispatch('maintenance_start', tree)
 
-  proc_pool = Pool(processes=20)
+  proc_pool = Pool(processes=int(options.workers))
 
   for current_dir, subdirs, files in os.walk(options.root):
     for subdir in subdirs:
