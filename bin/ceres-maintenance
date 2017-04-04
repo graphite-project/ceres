@@ -15,6 +15,13 @@ root_dir = os.environ['GRAPHITE_ROOT'] = os.environ.get('GRAPHITE_ROOT', '/opt/g
 lib_dir = join(root_dir, 'lib')
 sys.path.append(lib_dir)
 
+try:
+  from carbon.conf import settings, read_config
+  HAVE_CARBON = True
+except ImportError:
+  HAVE_CARBON = False
+
+
 EVENTS = (
   'maintenance_start',
   'maintenance_complete',
@@ -177,6 +184,15 @@ if __name__ == '__main__':
   Plugin.context['params']['maxSlicesPerNode'] = 10
   Plugin.context['params']['maxSliceGap'] = 80
   Plugin.context['params']['mode'] = 'operate'
+
+  # Read carbon settings
+  if HAVE_CARBON:
+    configopts = dict(config=None, instance='ceres-maintenance', pidfile=None, logdir=None)
+    program_settings = read_config('ceres-maintenance', configopts)
+    settings.update(program_settings)
+    Plugin.context['settings'] = settings
+  else:
+    Plugin.context['settings'] = {}
 
   # User-defined plugin vars
   plugin_args = []
