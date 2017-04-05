@@ -16,3 +16,4 @@ install:
 script:
     - nosetests
     - flake8 --max-line-length=100 --ignore=E111,E114,E121 ceres.py tests/*.py bin/*
+    - flake8 --max-line-length=100 --ignore=E111,E114,E121,F821 plugins/maintenance/*
