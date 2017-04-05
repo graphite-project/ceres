@@ -243,6 +243,7 @@ if __name__ == '__main__':
   proc_pool = Pool(processes=int(options.workers))
 
   for current_dir, subdirs, files in os.walk(options.root):
+    subdirs.sort()
     for subdir in subdirs:
       if subdir == '.ceres-tree':
         continue
