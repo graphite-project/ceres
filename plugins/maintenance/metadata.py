@@ -43,7 +43,7 @@ def node_found(node):
 
   try:
     new_metadata = determine_metadata(node.nodePath)
-  except:
+  except Exception:
     return
 
   # Work out whether any storage rules have changed.

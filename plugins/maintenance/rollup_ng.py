@@ -44,7 +44,7 @@ def node_found(node):
   t = rollupTime
   try:
     metadata = node.readMetadata()
-  except:
+  except ceres.CorruptNode:
     log("failed to read metadata: %s" % node)
     return
   for (precision, retention) in metadata['retentions']:
