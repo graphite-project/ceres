@@ -1,5 +1,6 @@
 # Ceres
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/e714322dad124c279d42b217a763bf6e)](https://www.codacy.com/app/graphite-project/ceres?utm_source=github.com&utm_medium=referral&utm_content=graphite-project/ceres&utm_campaign=badger)
 [![Build Status](https://secure.travis-ci.org/graphite-project/ceres.png)](http://travis-ci.org/graphite-project/ceres)
 
 Ceres is *not actively maintained*.
