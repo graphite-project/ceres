@@ -2,6 +2,7 @@
 
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/e714322dad124c279d42b217a763bf6e)](https://www.codacy.com/app/graphite-project/ceres?utm_source=github.com&utm_medium=referral&utm_content=graphite-project/ceres&utm_campaign=badger)
 [![Build Status](https://secure.travis-ci.org/graphite-project/ceres.png)](http://travis-ci.org/graphite-project/ceres)
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bhttps%3A%2F%2Fgithub.com%2Fgraphite-project%2Fceres.svg?type=shield)](https://app.fossa.io/projects/git%2Bhttps%3A%2F%2Fgithub.com%2Fgraphite-project%2Fceres?ref=badge_shield)
 
 Ceres is *not actively maintained*.
 
